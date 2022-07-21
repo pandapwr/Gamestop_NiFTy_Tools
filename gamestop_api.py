@@ -1,10 +1,10 @@
 import requests
-import json
 from datetime import datetime
 
 API_HEADERS = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
 }
+
 
 class gamestop_api:
     def __init__(self):
@@ -13,6 +13,7 @@ class gamestop_api:
         self.gas_price = 0
         self.eth_fee = 0
         self.eth_usd = 0
+        self.get_exchange_rate()
 
     def _add_datetime(self, data):
         for collection in data:
@@ -39,6 +40,9 @@ class gamestop_api:
         response = requests.get(api_url, headers=self.headers).json()['data']
 
         return self._add_datetime(response)
+
+    def usd(self, value):
+        return value * self.eth_usd
 
 
 class nft_collection:
@@ -147,27 +151,56 @@ class nft_collection:
 
 
 class nft:
-    def __init__(self, nft_id):
+    def __init__(self, nft_id, get_orders=False):
         self.headers = API_HEADERS
         self.nft_id = nft_id
+        self.lowest_price = 0
+        self.on_gs_nft = False
         self.data = self.get_nft_info()
+        if get_orders:
+            self.orders = self.get_orders()
+
 
     def _add_datetime(self, data):
+
         data['createdAt'] = datetime.strptime(data['createdAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
         data['updatedAt'] = datetime.strptime(data['updatedAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
         data['firstMintedAt'] = datetime.strptime(data['firstMintedAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
+
         return data
 
     def get_nft_info(self):
-        api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
-                   f"nftId={self.nft_id}")
+        if len(self.nft_id) > 100:
+            api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
+                       f"tokenIdAndContractAddress={self.nft_id}")
+        else:
+            api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
+                       f"nftId={self.nft_id}")
+
         response = requests.get(api_url, headers=self.headers).json()
-        return self._add_datetime(response)
+        if response.get('nftId'):
+            self.on_gs_nft = True
+            return self._add_datetime(response)
+        else:
+            return []
 
     def get_orders(self):
         api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftOrders?"
                    f"nftId={self.nft_id}")
         response = requests.get(api_url, headers=self.headers).json()
+        lowest_price = 100000000
+        for order in response:
+            order['pricePerNft'] = float(order['pricePerNft']) / 10 ** 18
+            if order['pricePerNft'] < lowest_price:
+                lowest_price = order['pricePerNft']
+            order['createdAt'] = datetime.strptime(order['createdAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
+            order['updatedAt'] = datetime.strptime(order['updatedAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
+            order['validUntil'] = datetime.fromtimestamp(order['validUntil'])
+        self.orders = response
+        if lowest_price == 100000000:
+            self.lowest_price = 0
+        else:
+            self.lowest_price = lowest_price
         return response
 
     def get_royalty(self):
@@ -177,7 +210,7 @@ class nft:
         return self.data['metadataJson']['name']
 
     def get_total_number(self):
-        return self.data['metadataJson']['amount']
+        return self.data['amount']
 
     def get_traits(self):
         return self.data['metadataJson']['properties']
@@ -197,8 +230,94 @@ class nft:
     def get_state(self):
         return self.data['state']
 
+    def get_url(self):
+        return f"https://nft.gamestop.com/token/{self.data['contractAddress']}/{self.data['tokenId']}"
+
+    def get_nftId(self):
+        return self.data['nftId']
+
+    def get_lowest_price(self):
+        if len(self.orders) == 0:
+            self.get_orders()
+        return self.lowest_price
+
+
+class user:
+    def __init__(self, profile_id, get_nfts=False):
+        self.headers = API_HEADERS
+        self.username = None
+        self.address = None
+        self.data = self.get_user_profile(profile_id)
+        self.created_collections = []
+        self.owned_nfts = []
+        self.number_of_collections = self.get_created_collections()
+        if get_nfts:
+            self.owned_nfts = self.get_owned_nfts()
+
+    def _add_datetime(self, data):
+        data['createdAt'] = datetime.strptime(data['createdAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
+        data['updatedAt'] = datetime.strptime(data['updatedAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
+
+        return data
+
+    def get_user_profile(self, profile_id=None):
+        if len(profile_id) == 42:
+            api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getPublicProfile?address={profile_id}"
+        else:
+            api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getPublicProfile?displayName={profile_id}"
+        response = requests.get(api_url, headers=self.headers).json()
+        self.username = response['userName']
+        self.address = response['l1Address']
+
+        return response
+
+    def get_created_collections(self):
+        api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionsPaginated?"
+                   f"limit=0&offset=0&creatorEthAddress={self.address}")
+        response = requests.get(api_url, headers=self.headers).json()
+        if response['totalNum'] == 0:
+            return 0
+
+        api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionsPaginated?"
+                   f"limit={response['totalNum']}&offset=0&creatorEthAddress={self.address}"
+                   f"&sortBy=created&sortOrder=desc")
+        response = requests.get(api_url, headers=self.headers).json()['data']
+        self.created_collections = [self._add_datetime(collection) for collection in response]
+
+        return len(self.created_collections)
+
+    def get_owned_nfts(self):
+        api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getLoopringNftBalances?"
+                   f"address={self.address}")
+        response = requests.get(api_url, headers=self.headers).json()
+        self.number_of_nfts = response['totalEntries']
+
+        owned_nfts = []
+        for nft_entry in response['entries']:
+            nft_data = nft(f"{nft_entry['tokenId']}_{nft_entry['contractAddress']}")
+            if nft_data.on_gs_nft:
+                nft_row = {
+                    'name': nft_data.get_name(),
+                    'number_owned': nft_entry['amount'],
+                    'total_number': nft_data.get_total_number(),
+                    'nftId': nft_data.get_nftId(),
+                    'url': nft_data.get_url(),
+                    'thumbnail': f"https://www.gstop-content.com/ipfs/{nft_data.data['mediaThumbnailUri'][7:]}",
+                }
+                owned_nfts.append(nft_row)
+
+        return owned_nfts
+
+    def check_new_collection(self):
+        old_number_collections = self.number_of_collections
+        self.number_of_collections = self.get_created_collections()
+        if self.number_of_collections > old_number_collections:
+            return True
+        else:
+            return False
+
+
 
 gs = gamestop_api()
-coll = nft_collection("631d48e5-e60e-45af-9466-dfa8129b6acc")
-print(coll.get_nft_list())
-
+gs_user = user("pandapwr")
+gs_user.get_owned_nfts()
