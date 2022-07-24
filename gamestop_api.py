@@ -370,6 +370,9 @@ class Nft:
     def get_nftId(self):
         return self.data['nftId']
 
+    def get_collection(self):
+        return self.data['collectionId']
+
     def get_lowest_price(self):
         if len(self.orders) == 0:
             self.get_orders()
@@ -462,6 +465,9 @@ class User:
         def get_nft_value(nftId, amount_owned):
             nft_obj = Nft(nftId)
             price = nft_obj.get_lowest_price()
+            if price == 0:
+                collection = NftCollection(nft_obj.get_collection())
+                price = collection.get_floor_price()
             print(f"Value of {nft_obj.get_name()}: {str(price)} ETH")
             return price * float(amount_owned) * eth_usd
 
