@@ -239,7 +239,7 @@ class Nft:
             print(user.username)
             return [address, user.username, 2]
 
-        with ThreadPoolExecutor(max_workers=1) as executor:
+        with ThreadPoolExecutor(max_workers=50) as executor:
             futures = [executor.submit(get_username, address) for address in sellers.keys()]
             for future in futures:
                 sellers[future.result()[0]]['username'] = future.result()[1]
@@ -445,13 +445,32 @@ class User:
 
                 return nft_row
 
-        with ThreadPoolExecutor(max_workers=1) as executor:
+        with ThreadPoolExecutor(max_workers=50) as executor:
             futures = [executor.submit(get_nft_info, nft_entry) for nft_entry in response['entries']]
             for future in futures:
                 if future.result() is not None:
                     owned_nfts.append(future.result())
 
         return owned_nfts
+
+    def get_owned_nfts_value(self):
+        owned_nfts = self.get_owned_nfts()
+        gs = GamestopApi()
+        eth_usd = gs.get_exchange_rate()
+        total_value = 0
+
+        def get_nft_value(nftId, amount_owned):
+            nft_obj = Nft(nftId)
+            price = nft_obj.get_lowest_price()
+            print(f"Value of {nft_obj.get_name()}: {str(price)} ETH")
+            return price * float(amount_owned) * eth_usd
+
+        with ThreadPoolExecutor(max_workers=50) as executor:
+            futures = [executor.submit(get_nft_value, nft['nftId'], nft['number_owned']) for nft in owned_nfts]
+            for future in futures:
+                total_value += future.result()
+
+        return round(total_value, 2)
 
     def get_nft_number_owned(self, nft_id):
         if len(self.owned_nfts) == 0:
