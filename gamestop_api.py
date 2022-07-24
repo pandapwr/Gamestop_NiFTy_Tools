@@ -1,13 +1,12 @@
 import requests
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 API_HEADERS = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
 }
 
 
-class GamestopApi:
+class gamestop_api:
     def __init__(self):
         self.logged_in = False
         self.headers = API_HEADERS
@@ -46,13 +45,14 @@ class GamestopApi:
         return value * self.eth_usd
 
 
-class NftCollection:
+class nft_collection:
     def __init__(self, collectionID):
         self.headers = API_HEADERS
         self.collectionID = collectionID
         self.stats = self.get_collection_stats()
         self.metadata = self.get_collection_metadata()
         self.collection_nfts = self.get_collection_nfts(get_all=True)
+
 
     def _add_datetime(self, data):
 
@@ -108,6 +108,7 @@ class NftCollection:
         response = requests.get(api_url, headers=self.headers).json()
         return response
 
+
     '''
     Functions for returning collection information
     '''
@@ -149,8 +150,8 @@ class NftCollection:
         return [nft_id['nftId'] for nft_id in self.collection_nfts]
 
 
-class Nft:
-    def __init__(self, nft_id, get_orders=False, get_history=False, get_sellers=False):
+class nft:
+    def __init__(self, nft_id, get_orders=False):
         self.headers = API_HEADERS
         self.nft_id = nft_id
         self.lowest_price = 0
@@ -158,16 +159,7 @@ class Nft:
         self.data = self.get_nft_info()
         if get_orders:
             self.orders = self.get_orders()
-        else:
-            self.orders = []
-        if get_history:
-            self.history = self.get_history()
-        else:
-            self.history = []
-        if get_sellers:
-            self.sellers = self.get_sellers()
-        else:
-            self.sellers = []
+
 
     def _add_datetime(self, data):
 
@@ -184,8 +176,8 @@ class Nft:
         else:
             api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
                        f"nftId={self.nft_id}")
-        response = requests.get(api_url, headers=self.headers)
-        response = response.json()
+
+        response = requests.get(api_url, headers=self.headers).json()
         if response.get('nftId'):
             self.on_gs_nft = True
             return self._add_datetime(response)
@@ -211,132 +203,6 @@ class Nft:
             self.lowest_price = lowest_price
         return response
 
-    def get_sellers(self):
-        if len(self.orders) == 0:
-            self.orders = self.get_orders()
-        sellers = dict()
-
-        for order in self.orders:
-            if order['ownerAddress'] not in sellers:
-                sellers.update({order['ownerAddress']: {
-                                'amount_for_sale': int(order['amount']),
-                                'orders':
-                                    [{'orderId': order['orderId'],
-                                     'amount': order['amount'],
-                                     'price': order['pricePerNft']}]
-                                }})
-            else:
-                sellers[order['ownerAddress']]['amount_for_sale'] += int(order['amount'])
-                sellers[order['ownerAddress']]['orders'].append(
-                    {'orderId': order['orderId'],
-                     'amount': order['amount'],
-                     'price': order['pricePerNft']})
-
-        def get_username(address):
-            print(address)
-            user = User(f"{address}")
-
-            print(user.username)
-            return [address, user.username, 2]
-
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = [executor.submit(get_username, address) for address in sellers.keys()]
-            for future in futures:
-                sellers[future.result()[0]]['username'] = future.result()[1]
-                sellers[future.result()[0]]['number_owned'] = future.result()[2]
-
-        self.sellers = sellers
-        return sellers
-
-    def print_sellers(self):
-        if len(self.sellers) == 0:
-            self.sellers = self.get_sellers()
-
-        for seller in self.sellers:
-            prices = []
-
-            for index, order in enumerate(self.sellers[f"{seller}"]['orders']):
-                prices.append(f"{self.sellers[f'{seller}']['orders'][index]['amount']} @ "
-                              f"{self.sellers[f'{seller}']['orders'][index]['price']} ETH"
-
-                              )
-
-            print(f"{self.sellers[seller]['username']} has"
-                  f" {self.sellers[seller]['amount_for_sale']}/{self.sellers[seller]['number_owned']}"
-                  f"edition{'s' if self.sellers[seller]['amount_for_sale'] > 1 else ''} for sale: "
-                  f"{[price for price in prices]}"
-                  )
-
-
-
-
-    def get_history(self):
-        api_url = ("https://api.nft.gamestop.com/nft-svc-marketplacehistory?"
-                   f"nftData={self.get_nft_data()}")
-        response = requests.get(api_url, headers=self.headers).json()
-        history = []
-
-        def process_transaction(transaction):
-            trade_history = dict()
-            trade_history['createdAt'] = datetime.fromtimestamp(transaction['createdAt'] / 1000)
-            trade_history['blockId'] = transaction['blockId']
-            trade_history['transactionId'] = transaction['transactionId']
-
-            if transaction['transaction']['txType'] == "SpotTrade":
-                buyer = User(f"{transaction['transaction']['orderA']['accountAddress']}")
-                seller = User(f"{transaction['transaction']['orderB']['accountAddress']}")
-                trade_history['tx_type'] = "SpotTrade"
-                trade_history['buyer'] = buyer.username
-                trade_history['buyer_address'] = buyer.address
-                trade_history['seller'] = seller.username
-                trade_history['seller_address'] = seller.address
-                trade_history['trade_price'] = (
-                        (float(transaction['transaction']['orderA']["amountS"]) / 10 ** 18) /
-                        int(transaction['transaction']['orderA']['amountB'])
-                )
-                trade_history['amount'] = transaction['transaction']['orderA']['amountB']
-
-            if transaction['transaction']['txType'] == "Transfer":
-                owner = User(f"{transaction['transaction']['accountAddress']}")
-                receiver = User(f"{transaction['transaction']['toAccountAddress']}")
-                trade_history['tx_type'] = "Transfer"
-                trade_history['owner'] = owner.username
-                trade_history['owner_address'] = owner.address
-                trade_history['receiver'] = receiver.username
-                trade_history['receiver_address'] = receiver.address
-                trade_history['amount'] = transaction['transaction']['token']['amount']
-
-            if transaction['transaction']['txType'] == "NftMint":
-                minter = User(f"{transaction['transaction']['minterAccountAddress']}")
-                trade_history['tx_type'] = "NftMint"
-                trade_history['minter'] = minter.username
-                trade_history['minter_address'] = minter.address
-                trade_history['amount'] = transaction['transaction']['nftToken']['amount']
-
-            return trade_history
-
-        with ThreadPoolExecutor(max_workers=100) as executor:
-            for i in executor.map(process_transaction, response):
-                history.append(i)
-
-        return history
-
-    def print_transaction_history(self):
-        if len(self.history) == 0:
-            self.history = self.get_history()
-
-        date_format = "%Y-%m-%d %H:%M:%S"
-        for entry in self.history:
-            if entry['tx_type'] == "NftMint":
-                print(
-                    f"[{entry['createdAt'].strftime(date_format)}] >> {entry['minter']} minted {entry['amount']} copies of {self.data['name']} ")
-            if entry['tx_type'] == "Transfer":
-                print(
-                    f"[{entry['createdAt'].strftime(date_format)}] >> {entry['owner']} transferred {entry['amount']} copies of {self.data['name']} to {entry['receiver']}")
-            if entry['tx_type'] == "SpotTrade":
-                print(
-                    f"[{entry['createdAt'].strftime(date_format)}] >> {entry['buyer']} bought {entry['amount']} copies of {self.data['name']} for {entry['trade_price']} ETH from {entry['seller']}")
-
     def get_royalty(self):
         return self.data['metadataJson']['royalty_percentage']
 
@@ -350,7 +216,7 @@ class Nft:
         return self.data['metadataJson']['properties']
 
     def get_nft_data(self):
-        return self.data['loopringNftInfo']['nftData'][0]
+        return self.data['loopringNftInfo']['nftData']
 
     def get_minted_datetime(self):
         return self.data['firstMintedAt']
@@ -376,16 +242,15 @@ class Nft:
         return self.lowest_price
 
 
-class User:
-    def __init__(self, profile_id, get_nfts=False, get_collections=False):
+class user:
+    def __init__(self, profile_id, get_nfts=False):
         self.headers = API_HEADERS
         self.username = None
         self.address = None
         self.data = self.get_user_profile(profile_id)
         self.created_collections = []
         self.owned_nfts = []
-        if get_collections:
-            self.number_of_collections = self.get_created_collections()
+        self.number_of_collections = self.get_created_collections()
         if get_nfts:
             self.owned_nfts = self.get_owned_nfts()
 
@@ -401,10 +266,7 @@ class User:
         else:
             api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getPublicProfile?displayName={profile_id}"
         response = requests.get(api_url, headers=self.headers).json()
-        if 'userName' in response and response['userName'] is not None:
-            self.username = response['userName']
-        else:
-            self.username = response['l1Address']
+        self.username = response['userName']
         self.address = response['l1Address']
 
         return response
@@ -429,10 +291,10 @@ class User:
                    f"address={self.address}")
         response = requests.get(api_url, headers=self.headers).json()
         self.number_of_nfts = response['totalEntries']
-        owned_nfts = []
 
-        def get_nft_info(nft_entry):
-            nft_data = Nft(f"{nft_entry['tokenId']}_{nft_entry['contractAddress']}")
+        owned_nfts = []
+        for nft_entry in response['entries']:
+            nft_data = nft(f"{nft_entry['tokenId']}_{nft_entry['contractAddress']}")
             if nft_data.on_gs_nft:
                 nft_row = {
                     'name': nft_data.get_name(),
@@ -442,23 +304,9 @@ class User:
                     'url': nft_data.get_url(),
                     'thumbnail': f"https://www.gstop-content.com/ipfs/{nft_data.data['mediaThumbnailUri'][7:]}",
                 }
-
-                return nft_row
-
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = [executor.submit(get_nft_info, nft_entry) for nft_entry in response['entries']]
-            for future in futures:
-                if future.result() is not None:
-                    owned_nfts.append(future.result())
+                owned_nfts.append(nft_row)
 
         return owned_nfts
-
-    def get_nft_number_owned(self, nft_id):
-        if len(self.owned_nfts) == 0:
-            self.owned_nfts = self.get_owned_nfts()
-        for nft in self.owned_nfts:
-            if nft['nftId'] == nft_id:
-                return nft['number_owned']
 
     def check_new_collection(self):
         old_number_collections = self.number_of_collections
@@ -469,9 +317,7 @@ class User:
             return False
 
 
-#gs = GamestopApi()
-#a = Nft("9d945e8e-c230-4f17-9f2d-01140455a019")
-b = User('pandapwr')
-print(b.get_owned_nfts())
-#print(b.get_nft_number_owned("9d945e8e-c230-4f17-9f2d-01140455a019"))
-#a.print_sellers()
+
+gs = gamestop_api()
+gs_user = user("pandapwr")
+gs_user.get_owned_nfts()
