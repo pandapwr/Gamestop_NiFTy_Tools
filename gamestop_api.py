@@ -517,3 +517,57 @@ class User:
             return True
         else:
             return False
+
+
+class UrlDecoder:
+    def __init__(self, url):
+        """
+        Take the url from a NFT in the marketplace and find relevant data for it
+        :param url: nft.gamestop.com/token/ ... / ...
+        :type url: str
+        """
+
+        api_url = "https://api.nft.gamestop.com/nft-svc-marketplace/getNft?tokenIdAndContractAddress="
+        url_split = url.split("/")
+        token_id = url_split[-1]
+        contract_address = url_split[-2]
+
+        nft_info = (api_url + token_id + "_" + contract_address)
+        response = requests.get(nft_info, headers=self.headers).json()
+
+
+        self.nft = {
+            'name': response.get('name'),
+            'description': response.get('description'),
+            'tokenId': token_id,
+            'contractAddress': contract_address,
+            'nftId': response.get('nftId'),
+            'nftData': response.get('loopringNftInfo').get('nftData')[0],
+            'collectionId': response.get('collectionId'),
+            }
+
+    def get_name(self):
+        return self.nft.get('name')
+
+    def get_description(self):
+        return self.nft.get('description')
+
+    def get_tokenId(self):
+        return self.nft.get('tokenId')
+
+    def get_contractAddress(self):
+        return self.nft.get('contractAddress')
+
+    def get_nftId(self):
+        return self.nft.get('nftId')
+
+    def get_nftData(self):
+        return self.nft.get('nftData')
+
+    def get_collectionId(self):
+        return self.nft.get('collectionId')
+
+    def get_nft(self):
+        return self.nft
+
+
