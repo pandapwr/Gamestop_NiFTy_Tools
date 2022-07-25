@@ -274,10 +274,11 @@ class Nft:
 
 
     def get_history(self):
-        api_url = ("https://api.nft.gamestop.com/nft-svc-marketplacehistory?"
+        api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/history?"
                    f"nftData={self.get_nft_data()}")
         response = requests.get(api_url, headers=self.headers).json()
         history = []
+
 
         def process_transaction(transaction):
             trade_history = dict()
@@ -526,25 +527,28 @@ class UrlDecoder:
         :param url: nft.gamestop.com/token/ ... / ...
         :type url: str
         """
-
+        self.headers = API_HEADERS
         api_url = "https://api.nft.gamestop.com/nft-svc-marketplace/getNft?tokenIdAndContractAddress="
         url_split = url.split("/")
         token_id = url_split[-1]
         contract_address = url_split[-2]
+        if token_id[:2]=="0x" and contract_address[:2]=="0x":
 
-        nft_info = (api_url + token_id + "_" + contract_address)
-        response = requests.get(nft_info, headers=self.headers).json()
+            nft_info = (api_url + token_id + "_" + contract_address)
+            response = requests.get(nft_info, headers=self.headers).json()
 
 
-        self.nft = {
-            'name': response.get('name'),
-            'description': response.get('description'),
-            'tokenId': token_id,
-            'contractAddress': contract_address,
-            'nftId': response.get('nftId'),
-            'nftData': response.get('loopringNftInfo').get('nftData')[0],
-            'collectionId': response.get('collectionId'),
-            }
+            self.nft = {
+                'name': response.get('name'),
+                'description': response.get('description'),
+                'tokenId': token_id,
+                'contractAddress': contract_address,
+                'nftId': response.get('nftId'),
+                'nftData': response.get('loopringNftInfo').get('nftData')[0],
+                'collectionId': response.get('collectionId'),
+                }
+        else:
+            raise Exception("Wrong url")
 
     def get_name(self):
         return self.nft.get('name')
@@ -569,5 +573,8 @@ class UrlDecoder:
 
     def get_nft(self):
         return self.nft
+
+    def __str__(self):
+        return str(self.nft)
 
 
