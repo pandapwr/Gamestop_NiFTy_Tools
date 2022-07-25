@@ -1,6 +1,6 @@
 import requests
 from datetime import datetime
-import loopring_api as loopring
+from . import loopring_api as loopring
 from concurrent.futures import ThreadPoolExecutor
 
 API_HEADERS = {
