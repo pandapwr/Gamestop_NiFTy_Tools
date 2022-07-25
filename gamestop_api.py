@@ -1,5 +1,6 @@
 import requests
 from datetime import datetime
+import loopring_api as loopring
 from concurrent.futures import ThreadPoolExecutor
 
 API_HEADERS = {
@@ -185,12 +186,14 @@ class Nft:
             api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
                        f"nftId={self.nft_id}")
         response = requests.get(api_url, headers=self.headers)
-        response = response.json()
-        if response.get('nftId'):
-            self.on_gs_nft = True
-            return self._add_datetime(response)
-        else:
-            return []
+        try:
+            response = response.json()
+            if response.get('nftId'):
+                self.on_gs_nft = True
+                return self._add_datetime(response)
+        except:
+            print(f"Invalid NFT: {api_url}")
+            return None
 
     def get_orders(self):
         api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftOrders?"
@@ -344,7 +347,7 @@ class Nft:
         return self.data['metadataJson']['name']
 
     def get_total_number(self):
-        return self.data['amount']
+        return int(self.data['amount'])
 
     def get_traits(self):
         return self.data['metadataJson']['properties']
@@ -376,7 +379,7 @@ class Nft:
     def get_lowest_price(self):
         if len(self.orders) == 0:
             self.get_orders()
-        return self.lowest_price
+        return float(self.lowest_price)
 
 
 class User:
@@ -387,6 +390,7 @@ class User:
         self.data = self.get_user_profile(profile_id)
         self.created_collections = []
         self.owned_nfts = []
+        self.number_of_nfts = 0
         if get_collections:
             self.number_of_collections = self.get_created_collections()
         if get_nfts:
@@ -427,14 +431,33 @@ class User:
 
         return len(self.created_collections)
 
-    def get_owned_nfts(self):
-        api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getLoopringNftBalances?"
-                   f"address={self.address}")
-        response = requests.get(api_url, headers=self.headers).json()
-        self.number_of_nfts = response['totalEntries']
+    def get_owned_nfts_lr(self, apiKey):
+        lr = loopring.LoopringAPI(apiKey)
+        account_id = lr.get_accountId_from_address(self.address)
+        nfts = lr.get_user_nft_balance(account_id)
+        return nfts
+
+
+    def get_owned_nfts(self, verbose=False):
+        cursor = 0
+        nft_list = []
+        while True:
+            api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getLoopringNftBalances?"
+                       f"address={self.address}")
+            if cursor > 0:
+                api_url += f"&cursor={cursor}"
+            response = requests.get(api_url, headers=self.headers).json()
+            if 'nextCursor' not in response.keys():
+                break
+            cursor = int(response['nextCursor'])
+            nft_list.extend(response['entries'])
+
+        print(f"Retrieved {len(nft_list)} NFTs")
+        self.number_of_nfts = len(nft_list)
+
         owned_nfts = []
 
-        def get_nft_info(nft_entry):
+        def get_nft_info(nft_entry, verbose):
             nft_data = Nft(f"{nft_entry['tokenId']}_{nft_entry['contractAddress']}")
             if nft_data.on_gs_nft:
                 nft_row = {
@@ -445,19 +468,21 @@ class User:
                     'url': nft_data.get_url(),
                     'thumbnail': f"https://www.gstop-content.com/ipfs/{nft_data.data['mediaThumbnailUri'][7:]}",
                 }
-
-                return nft_row
+                if 'nftId' in nft_row.keys():
+                    return nft_row
+                else:
+                    return None
 
         with ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [executor.submit(get_nft_info, nft_entry) for nft_entry in response['entries']]
+            futures = [executor.submit(get_nft_info, nft_entry, verbose) for nft_entry in nft_list]
             for future in futures:
                 if future.result() is not None:
                     owned_nfts.append(future.result())
 
         return owned_nfts
 
-    def get_owned_nfts_value(self):
-        owned_nfts = self.get_owned_nfts()
+    def get_owned_nfts_value(self, verbose=False):
+        owned_nfts = self.get_owned_nfts(verbose)
         gs = GamestopApi()
         eth_usd = gs.get_exchange_rate()
         total_value = 0
@@ -465,7 +490,7 @@ class User:
         def get_nft_value(nftId, amount_owned):
             nft_obj = Nft(nftId)
             price = nft_obj.get_lowest_price()
-            if price == 0:
+            if nft_obj.get_total_number() == 1:
                 collection = NftCollection(nft_obj.get_collection())
                 price = collection.get_floor_price()
             print(f"Value of {nft_obj.get_name()}: {str(price)} ETH")
