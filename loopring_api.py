@@ -81,4 +81,8 @@ class LoopringAPI:
             offset += limit
 
         return data
+    def get_block(self, id):
+        api_url = "https://api3.loopring.io/api/v3/block/getBlock?id="
+        response = self.lr.get(api_url+str(id)).json()
+        print(response)
 
