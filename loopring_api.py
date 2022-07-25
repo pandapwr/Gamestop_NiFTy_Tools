@@ -1,7 +1,7 @@
 import requests
 from ratelimit import limits, sleep_and_retry
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import gamestop_api
+from . import gamestop_api
 
 
 class LoopringAPI:
