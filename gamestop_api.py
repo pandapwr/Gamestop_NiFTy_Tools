@@ -1,7 +1,8 @@
 import requests
 from datetime import datetime
-from . import loopring_api as loopring
+import loopring_api as loopring
 from concurrent.futures import ThreadPoolExecutor
+import nifty_database as nifty
 
 API_HEADERS = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
@@ -384,14 +385,33 @@ class Nft:
 
 
 class User:
-    def __init__(self, profile_id, get_nfts=False, get_collections=False):
+    def __init__(self, username=None, accountId=None, address=None, get_nfts=False, get_collections=False):
         self.headers = API_HEADERS
-        self.username = None
-        self.address = None
-        self.data = self.get_user_profile(profile_id)
+        self.username = username
+        self.address = address
+        self.accountId = accountId
         self.created_collections = []
         self.owned_nfts = []
         self.number_of_nfts = 0
+
+        self.lr = loopring.LoopringAPI()
+
+        self.db = nifty.NiftyDB()
+        if self.username is not None:
+            self.accountId, self.address, self.username = self.db.get_user_info(username=self.username)
+        elif self.accountId is not None:
+            self.accountId, self.address, self.username = self.db.get_user_info(accountId=self.accountId)
+        elif self.address is not None:
+            self.accountId, self.address, self.username = self.db.get_user_info(address=self.address)
+
+        if self.address is None:
+            if username is not None:
+                self.get_user_profile(username=username, updateDb=True)
+            elif accountId is not None:
+                self.get_user_profile(accountId=accountId, updateDb=True)
+            elif address is not None:
+                self.get_user_profile(address=address, updateDb=True)
+
         if get_collections:
             self.number_of_collections = self.get_created_collections()
         if get_nfts:
@@ -403,19 +423,31 @@ class User:
 
         return data
 
-    def get_user_profile(self, profile_id=None):
-        if len(profile_id) == 42:
-            api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getPublicProfile?address={profile_id}"
-        else:
-            api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getPublicProfile?displayName={profile_id}"
+    def get_user_profile(self, accountId=None, username=None, address=None, updateDb=False):
+
+        if accountId is not None:
+            result = self.lr.get_user_address(accountId)
+            self.address = result['address']
+            self.username = result['username']
+            if updateDb:
+                self.db.insert_user_info(accountId=self.accountId, address=self.address, username=self.username)
+
+            return
+        elif address is not None:
+            api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getPublicProfile?address={address}"
+        elif username is not None:
+            api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getPublicProfile?displayName={username}"
         response = requests.get(api_url, headers=self.headers).json()
         if 'userName' in response and response['userName'] is not None:
             self.username = response['userName']
         else:
             self.username = response['l1Address']
         self.address = response['l1Address']
+        self.accountId = self.lr.get_accountId_from_address(self.address)
+        if updateDb:
+            self.db.insert_user_info(accountId=self.accountId, address=self.address, username=self.username)
 
-        return response
+        return
 
     def get_created_collections(self):
         api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionsPaginated?"
