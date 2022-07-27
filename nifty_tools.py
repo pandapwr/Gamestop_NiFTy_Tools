@@ -2,6 +2,9 @@ import csv
 import datetime
 import os
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import requests
 import json
 import xlsxwriter
@@ -101,33 +104,25 @@ def grab_new_blocks():
             print(f"Block {last_block+i} not found, database is up to date.")
             break
 
+# Plot price history using pandas
+def plot_price_history(nft_id):
+    nf = nifty.NiftyDB()
+    nft_data = nf.get_nft_data(nft_id)
+    data = nf.get_nft_trade_history(nft_id)
+    df = pd.DataFrame(data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
+                                     'amount', 'price', 'priceUsd', 'seller', 'buyer'])
+    df.createdAt = pd.to_datetime(df.createdAt, unit='s')
+    df.set_index('createdAt')
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    fig.add_scatter(x=df.createdAt, y=df.price, name='Price', secondary_y=False)
+    fig.add_scatter(x=df.createdAt, y=df.priceUsd, name='Price USD', secondary_y=True)
+
+    fig.update_layout(title_text=f"{nft_data['name']} Price History")
+    fig.update_xaxes(title_text="Date")
+    fig.update_yaxes(title_text="Price", secondary_y=False)
+    fig.update_yaxes(title_text="Price USD", secondary_y=True)
+    fig.show()
 
 grab_new_blocks()
-
-
-
-
-#dump_nft_holders()
-
-
-#data = get_historical_crypto_data('ETH', '2022-07-25-00-00')
-
-
-
-
-
-
-#print(nf.get_nft_data("0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3"))
-#nf.close()
-
-#lr = loopring.LoopringAPI()
-#for i in range(26060, 26103):
-#    lr.save_nft_tx(lr.filter_nft_txs(i))
-
-#lr = loopring.LoopringAPI()
-#print(lr.get_user_address('pandapwr'))
-#print(lr.get_block(26019))
-#print(lr.filter_nft_txs(26021))
-
-#db = nifty.NiftyDB()
-#db.get_user_info(1231)
