@@ -105,6 +105,11 @@ class LoopringAPI:
 
         return response
 
+    def get_pending(self):
+        api_url = "https://api3.loopring.io/api/v3/block/getPendingRequests"
+        response = self.lr.get(api_url).json()
+        return response
+
     # Grabs the given block and filters for transactions with nftData
     def filter_nft_txs(self, blockId):
         block_txs = self.get_block(blockId)
