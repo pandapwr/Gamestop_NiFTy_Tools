@@ -1,4 +1,5 @@
 import sqlite3
+import pandas as pd
 
 db_path = "niftyDB.db"
 
@@ -34,16 +35,83 @@ class NiftyDB:
         self.c.execute("INSERT INTO users VALUES (?, ?, ?)", (accountId, address, username))
         self.conn.commit()
 
-    def insert_nft(self, nftId, nftData, tokenId, contractAddress, creatorAddress, name, collectionId, createdAt,
+    def insert_nft(self, nftId, nftData, tokenId, contractAddress, creatorEthAddress, name, amount, collectionId, createdAt,
                    firstMintedAt, updatedAt):
-        self.c.execute("INSERT INTO nfts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                       (nftId, nftData, tokenId, contractAddress, creatorAddress, name, collectionId, createdAt,
-                        updatedAt))
+        self.c.execute("INSERT INTO nfts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                       (nftId, nftData, tokenId, contractAddress, creatorEthAddress, name, amount, collectionId, createdAt,
+                        firstMintedAt, updatedAt))
         self.conn.commit()
 
-    def insert_transaction(self, blockId, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd):
-        self.c.execute("INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                       (blockId, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd))
+    def insert_transaction(self, blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd):
+        print("Inserting: ", blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd)
+        self.c.execute("INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                       (blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd))
         self.conn.commit()
 
+    def check_if_block_exists(self, blockId):
+        self.c.execute("SELECT * FROM transactions WHERE blockId=?", (blockId,))
+        result = self.c.fetchone()
+        if result is None:
+            return False
+        else:
+            return True
 
+    def get_last_historical_price_data(self, currency):
+        self.c.execute("SELECT * FROM historical_crypto_prices WHERE currency=? ORDER BY timestamp DESC LIMIT 1", (currency,))
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result['timestamp']
+
+    def get_historical_price(self, currency, timestamp):
+        start = timestamp - 500
+        end = timestamp + 500
+        query = f"SELECT * FROM historical_crypto_prices WHERE currency='{currency}' AND timestamp BETWEEN {start} AND {end}"
+        print(f"Query: {query}")
+        self.c.execute("SELECT * FROM historical_crypto_prices WHERE currency=? AND timestamp BETWEEN ? AND ? ORDER BY timestamp DESC",
+                          (currency, start, end))
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result['price']
+
+    def insert_historical_price_data(self, dataFrame, currency):
+        for col in dataFrame.columns:
+            print(col)
+
+        for index in dataFrame.index:
+
+            timestamp = (dataFrame['time'][index] - pd.Timestamp("1970-01-01")) // pd.Timedelta('1s')
+            datetime = dataFrame['time'][index].strftime('%Y-%m-%d %H:%M:%S')
+            price = dataFrame['open'][index]
+            self.c.execute("INSERT INTO historical_crypto_prices VALUES (?, ?, ?, ?)",
+                           (timestamp, datetime, currency, price))
+            print(f"Inserted {timestamp} {datetime} | {currency}-USD: ${price}")
+        self.conn.commit()
+
+    def get_nft_transactions(self, nftId):
+
+        self.c.execute("SELECT * FROM transactions WHERE nftData=?", (nftId,))
+        result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
+
+    def get_nft_data(self, nft_id):
+        # nftData has length of 66, tokenId+contractAddress has length of 109, nftId has length, 36
+        if len(nft_id) == 66:
+            self.c.execute("SELECT * FROM nfts WHERE nftData=?", (nft_id,))
+        elif len(nft_id) == 109:
+            self.c.execute("SELECT * FROM nfts WHERE tokenId=?", (nft_id[:66],))
+        elif len(nft_id) == 36:
+            self.c.execute("SELECT * FROM nfts WHERE nftId=?", (nft_id,))
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        elif len(result) == 0:
+            return None
+        else:
+            return result

@@ -3,6 +3,7 @@ from datetime import datetime
 import loopring_api as loopring
 from concurrent.futures import ThreadPoolExecutor
 import nifty_database as nifty
+import time
 
 API_HEADERS = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
@@ -152,12 +153,16 @@ class NftCollection:
 
 
 class Nft:
-    def __init__(self, nft_id, get_orders=False, get_history=False, get_sellers=False):
+    def __init__(self, nft_id, get_orders=False, get_history=False, get_sellers=False, get_all_data=False):
         self.headers = API_HEADERS
         self.nft_id = nft_id
+        self.get_all_data = get_all_data
         self.lowest_price = 0
         self.on_gs_nft = False
+        self.in_db = False
+
         self.data = self.get_nft_info()
+
         if get_orders:
             self.orders = self.get_orders()
         else:
@@ -171,30 +176,67 @@ class Nft:
         else:
             self.sellers = []
 
-    def _add_datetime(self, data):
-
-        data['createdAt'] = datetime.strptime(data['createdAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
-        data['updatedAt'] = datetime.strptime(data['updatedAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
-        data['firstMintedAt'] = datetime.strptime(data['firstMintedAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
+    def _add_datetime(self, data, from_timestamp=False):
+        if from_timestamp:
+            data['createdAt'] = datetime.fromtimestamp(data['createdAt'])
+            data['updatedAt'] = datetime.fromtimestamp(data['updatedAt'])
+            data['firstMintedAt'] = datetime.fromtimestamp(data['firstMintedAt'])
+        else:
+            data['createdAt'] = datetime.strptime(data['createdAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
+            data['updatedAt'] = datetime.strptime(data['updatedAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
+            data['firstMintedAt'] = datetime.strptime(data['firstMintedAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
 
         return data
 
+
     def get_nft_info(self):
+        # First query the database to see if the data is already cached
+        db = nifty.NiftyDB()
+        db_data = db.get_nft_data(self.nft_id)
+
+        if db_data is not None and self.get_all_data is False:
+            data = dict()
+            data['nftId'] = db_data['nftId']
+            data['name'] = db_data['name']
+            data['nftData'] = db_data['nftData']
+            data['tokenId'] = db_data['tokenId']
+            data['contractAddress'] = db_data['contractAddress']
+            data['creatorEthAddress'] = db_data['creatorEthAddress']
+            data['collectionId'] = db_data['collectionId']
+            data['createdAt'] = db_data['createdAt']
+            data['updatedAt'] = db_data['updatedAt']
+            data['firstMintedAt'] = db_data['firstMintedAt']
+            self.on_gs_nft = True
+            self.in_db = True
+            return self._add_datetime(data, from_timestamp=True)
+
+        # If NFT not found in database, query the API
         if len(self.nft_id) > 100:
             api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
                        f"tokenIdAndContractAddress={self.nft_id}")
         else:
             api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
                        f"nftId={self.nft_id}")
-        response = requests.get(api_url, headers=self.headers)
-        try:
-            response = response.json()
-            if response.get('nftId'):
-                self.on_gs_nft = True
-                return self._add_datetime(response)
-        except:
-            print(f"Invalid NFT: {api_url}")
+        response = requests.get(api_url, headers=self.headers).json()
+
+        if "nftId" in response:
+            # If the NFT is on GameStop, add it to the database
+            self.on_gs_nft = True
+            response = self._add_datetime(response)
+            response['createdAt'] = time.mktime(response['createdAt'].timetuple())
+            response['updatedAt'] = time.mktime(response['updatedAt'].timetuple())
+            response['firstMintedAt'] = time.mktime(response['firstMintedAt'].timetuple())
+            db.insert_nft(response['nftId'], response['loopringNftInfo']['nftData'][0], response['tokenId'],
+                          response['contractAddress'], response['creatorEthAddress'], response['metadataJson']['name'],
+                          response['amount'], response['collectionId'], response['createdAt'],
+                          response['firstMintedAt'], response['updatedAt'])
+            self.in_db = True
+            db.close()
+            return response
+        else:
+            db.close()
             return None
+
 
     def get_orders(self):
         api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftOrders?"
@@ -280,7 +322,6 @@ class Nft:
         response = requests.get(api_url, headers=self.headers).json()
         history = []
 
-
         def process_transaction(transaction):
             trade_history = dict()
             trade_history['createdAt'] = datetime.fromtimestamp(transaction['createdAt'] / 1000)
@@ -346,15 +387,24 @@ class Nft:
         return self.data['metadataJson']['royalty_percentage']
 
     def get_name(self):
-        return self.data['metadataJson']['name']
+        if self.get_all_data is False and self.in_db is True:
+            return self.data['name']
+        else:
+            return self.data['metadataJson']['name']
 
     def get_total_number(self):
         return int(self.data['amount'])
 
     def get_traits(self):
+        if self.get_all_data is False:
+            self.get_all_data = True
+            self.data = self.get_nft_info()
         return self.data['metadataJson']['properties']
 
     def get_nft_data(self):
+        if self.get_all_data is False:
+            self.get_all_data = True
+            self.data = self.get_nft_info()
         return self.data['loopringNftInfo']['nftData'][0]
 
     def get_minted_datetime(self):
@@ -367,6 +417,9 @@ class Nft:
         return self.data['updatedAt']
 
     def get_state(self):
+        if self.get_all_data is False:
+            self.get_all_data = True
+            self.data = self.get_nft_info()
         return self.data['state']
 
     def get_url(self):
@@ -385,11 +438,11 @@ class Nft:
 
 
 class User:
-    def __init__(self, username=None, accountId=None, address=None, get_nfts=False, get_collections=False):
+    def __init__(self, username=None, address=None, get_nfts=False, get_collections=False):
         self.headers = API_HEADERS
-        self.username = username
-        self.address = address
-        self.accountId = accountId
+        self.username = None
+        self.address = None
+        self.accountId = None
         self.created_collections = []
         self.owned_nfts = []
         self.number_of_nfts = 0
@@ -397,18 +450,14 @@ class User:
         self.lr = loopring.LoopringAPI()
 
         self.db = nifty.NiftyDB()
-        if self.username is not None:
-            self.accountId, self.address, self.username = self.db.get_user_info(username=self.username)
-        elif self.accountId is not None:
-            self.accountId, self.address, self.username = self.db.get_user_info(accountId=self.accountId)
-        elif self.address is not None:
-            self.accountId, self.address, self.username = self.db.get_user_info(address=self.address)
+        if address is not None:
+            self.accountId, self.address, self.username = self.db.get_user_info(address=address)
+        else:
+            self.accountId, self.address, self.username = self.db.get_user_info(address=address)
 
-        if self.address is None:
+        if self.accountId is None:
             if username is not None:
                 self.get_user_profile(username=username, updateDb=True)
-            elif accountId is not None:
-                self.get_user_profile(accountId=accountId, updateDb=True)
             elif address is not None:
                 self.get_user_profile(address=address, updateDb=True)
 
@@ -423,21 +472,25 @@ class User:
 
         return data
 
-    def get_user_profile(self, accountId=None, username=None, address=None, updateDb=False):
+    def get_user_profile(self, username=None, address=None, updateDb=False):
 
-        if accountId is not None:
-            result = self.lr.get_user_address(accountId)
-            self.address = result['address']
-            self.username = result['username']
-            if updateDb:
-                self.db.insert_user_info(accountId=self.accountId, address=self.address, username=self.username)
-
-            return
+        if username is not None:
+            api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getPublicProfile?displayName={username}"
         elif address is not None:
             api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getPublicProfile?address={address}"
-        elif username is not None:
-            api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getPublicProfile?displayName={username}"
-        response = requests.get(api_url, headers=self.headers).json()
+        else:
+            raise Exception("No username or address provided")
+
+        attempts = 0
+        while attempts < 5:
+            try:
+                response = requests.get(api_url, headers=self.headers).json()
+                break
+            except requests.exceptions.JSONDecodeError:
+                print("JSONDecodeError, retrying")
+                attempts += 1
+                time.sleep(1)
+
         if 'userName' in response and response['userName'] is not None:
             self.username = response['userName']
         else:
@@ -519,6 +572,7 @@ class User:
         gs = GamestopApi()
         eth_usd = gs.get_exchange_rate()
         total_value = 0
+        collection_floors = dict()
 
         def get_nft_value(nftId, amount_owned):
             nft_obj = Nft(nftId)
