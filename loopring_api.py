@@ -144,23 +144,3 @@ class LoopringAPI:
             print(f"Saved block {blockData['blockId']} to database")
 
         db.close()
-
-    def save_nft_tx(self, blockData):
-        db = nifty.NiftyDB()
-        block_price = db.get_historical_price('ETH', int(blockData['createdAt']/1000))
-        print(f"Block {blockData['blockId']} price: ${block_price}")
-
-        # Check to see if block already exists in database
-        if db.check_if_block_exists(blockData['blockId']) is True:
-            print(f"Block {blockData['blockId']} already exists in database")
-        else:
-            for tx in blockData['transactions']:
-                created = int(blockData['createdAt']/1000)
-                price = float(tx['orderA']['amountS']) / 10 ** 18 / float(tx['orderA']['amountB'])
-                db.insert_transaction(blockData['blockId'], created, tx['txType'],
-                                      tx['orderA']['nftData'], tx['orderB']['accountID'], tx['orderA']['accountID'],
-                                      tx['orderA']['amountB'], price, round(price*block_price,2))
-
-            print(f"Saved block {blockData['blockId']} to database")
-
-        db.close()

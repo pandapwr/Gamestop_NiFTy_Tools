@@ -56,6 +56,11 @@ class NiftyDB:
         else:
             return True
 
+    def get_latest_saved_block(self):
+        self.c.execute("SELECT * FROM transactions ORDER BY blockId DESC LIMIT 1")
+        result = self.c.fetchone()
+        return result['blockId']
+
     def get_last_historical_price_data(self, currency):
         self.c.execute("SELECT * FROM historical_crypto_prices WHERE currency=? ORDER BY timestamp DESC LIMIT 1", (currency,))
         result = self.c.fetchone()
@@ -65,12 +70,12 @@ class NiftyDB:
             return result['timestamp']
 
     def get_historical_price(self, currency, timestamp):
-        start = timestamp - 500
+        start = timestamp - 1000
         end = timestamp + 500
-        query = f"SELECT * FROM historical_crypto_prices WHERE currency='{currency}' AND timestamp BETWEEN {start} AND {end}"
+        query = f"SELECT * FROM historical_crypto_prices WHERE currency='{currency}' AND timestamp " \
+                f"BETWEEN {start} AND {end} ORDER BY timestamp DESC"
         print(f"Query: {query}")
-        self.c.execute("SELECT * FROM historical_crypto_prices WHERE currency=? AND timestamp BETWEEN ? AND ? ORDER BY timestamp DESC",
-                          (currency, start, end))
+        self.c.execute(query)
         result = self.c.fetchone()
         if result is None:
             return None
