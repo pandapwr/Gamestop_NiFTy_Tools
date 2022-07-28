@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import loopring_api as loopring
 from gamestop_api import User, Nft, NftCollection, GamestopApi
 from Historic_Crypto import HistoricalData
+from coinbase_api import CoinbaseAPI
 import nifty_database as nifty
 
 
@@ -27,6 +28,13 @@ CC_LOADING_LEVEL = "bb2199e0-c614-460c-ba95-54593eb8caff"
 CC_CLONE_CENTER = "15a15703-a3ed-4768-8d7a-5931025294ed"
 CC_CLONEBOT_STICKER = "b67b2a29-5931-4610-a157-607877340ea2"
 MB_ASTROBOY = "47400769-a0e8-4763-8f42-82e3566ff512"
+
+PT_STUDY = "4a0155d9-501e-477d-868c-c81d22d88ec2"
+PT_SEARCH = "6882580c-3336-44da-b6f1-225d7df71b3f"
+PT_DISCOVER = "8fc72668-c553-4c3e-a660-eed928ae5f40"
+PT_SURVEY = "eb2cab68-2ee6-42e1-b513-74fb632f8462"
+PT_SIGNAL = "6bdbf3cb-8df8-488c-b4a3-f74ca523a528"
+PT_TRANSFORM = "ba66f379-7f8e-4071-8667-471ceaacb018"
 
 
 def save_nft_holders(nft_id, file_name):
@@ -59,7 +67,8 @@ def save_nft_holders(nft_id, file_name):
 
 
 def get_historical_crypto_data(currency, start_date):
-    return HistoricalData(f'{currency}-USD', 900, start_date).retrieve_data()
+    print(f"Getting historical data for {currency} starting at {start_date}")
+    return CoinbaseAPI(f'{currency}-USD', start_date).retrieve_data()
 
 
 def dump_nft_holders():
@@ -72,7 +81,6 @@ def update_historical_crypto_data(currency):
     nf = nifty.NiftyDB()
     last_price_timestamp = nf.get_last_historical_price_data(currency)
     last_price_timestamp = datetime.datetime.utcfromtimestamp(last_price_timestamp).strftime('%Y-%m-%d-%H-%M')
-    print(last_price_timestamp)
     data = get_historical_crypto_data(currency, last_price_timestamp)
     nf.insert_historical_price_data(currency, data[1:])
     nf.close()
@@ -106,6 +114,7 @@ def grab_new_blocks():
 
 # Plot price history using pandas
 def plot_price_history(nft_id):
+    nft = Nft(nft_id)
     nf = nifty.NiftyDB()
     nft_data = nf.get_nft_data(nft_id)
     data = nf.get_nft_trade_history(nft_id)

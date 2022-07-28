@@ -1,5 +1,6 @@
 import sqlite3
 import pandas as pd
+import gamestop_api
 
 db_path = "niftyDB.db"
 
@@ -120,16 +121,15 @@ class NiftyDB:
 
     def get_nft_trade_history(self, nft_id):
         nftData = self.get_nft_data(nft_id)['nftData']
-        if nftData is not None:
-            self.c.execute(f"SELECT transactions.*, seller.username as seller, buyer.username as buyer FROM transactions "
-                           f"INNER JOIN users as seller ON transactions.sellerAccount = seller.accountId "
-                            "INNER JOIN users AS buyer ON transactions.buyerAccount = buyer.accountId "
-                           f"WHERE nftData='{nftData}'")
-            result = self.c.fetchall()
-            if result is None:
-                print(f"No transactions found for {nft_id}")
-                return None
-            else:
-                return result
-        else:
+
+        self.c.execute(f"SELECT transactions.*, seller.username as seller, buyer.username as buyer FROM transactions "
+                       f"INNER JOIN users as seller ON transactions.sellerAccount = seller.accountId "
+                        "INNER JOIN users AS buyer ON transactions.buyerAccount = buyer.accountId "
+                       f"WHERE nftData='{nftData}'")
+        result = self.c.fetchall()
+        if result is None:
+            print(f"No transactions found for {nft_id}")
             return None
+        else:
+            return result
+
