@@ -5,10 +5,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import requests
-import json
-import xlsxwriter
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import kaleido
 import loopring_api as loopring
 from gamestop_api import User, Nft, NftCollection, GamestopApi
 from Historic_Crypto import HistoricalData
@@ -46,7 +43,7 @@ def save_nft_holders(nft_id, file_name):
     filename = NFT_HOLDERS_FOLDER + '\\' + date + ' ' + \
                "".join(x for x in nft.get_name() if (x.isalnum() or x in "._- ")) + '.csv'
     print(f"Writing to {filename}")
-    total_holders, nft_holders = lr.get_nft_holders(nft.get_nft_data())
+    total_holders, nft_holders = lr.get_nft_holders(nft.data['nftData'])
 
     with open(filename, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
@@ -73,7 +70,6 @@ def get_historical_crypto_data(currency, start_date):
 
 def dump_nft_holders():
     full_set = [CC_10_WORLDS, CC_CHROME_CANNON, CC_CLONE_CARD, CC_CAN_D, CC_CLONE, CC_CYBER_CYCLE, CC_LOADING_LEVEL, CC_CLONE_CENTER]
-    #full_set = [CC_CLONEBOT_STICKER]
     for nft in full_set:
         save_nft_holders(nft, f"Cyber Crew Owners List")
 
@@ -113,7 +109,7 @@ def grab_new_blocks():
             break
 
 # Plot price history using pandas
-def plot_price_history(nft_id):
+def plot_price_history(nft_id, save_file=False):
     nft = Nft(nft_id)
     nf = nifty.NiftyDB()
     nft_data = nf.get_nft_data(nft_id)
@@ -128,10 +124,31 @@ def plot_price_history(nft_id):
     fig.add_scatter(x=df.createdAt, y=df.price, name='Price', secondary_y=False)
     fig.add_scatter(x=df.createdAt, y=df.priceUsd, name='Price USD', secondary_y=True)
 
-    fig.update_layout(title_text=f"{nft_data['name']} Price History")
+    fig.update_layout(title_text=f"{nft_data['name']} Price History - {datetime.datetime.now().strftime('%Y-%m-%d')}")
     fig.update_xaxes(title_text="Date")
     fig.update_yaxes(title_text="Price", secondary_y=False)
     fig.update_yaxes(title_text="Price USD", secondary_y=True)
     fig.show()
 
-grab_new_blocks()
+    if save_file:
+        folder = f"price_history_charts\\{datetime.datetime.now().strftime('%Y-%m-%d')}"
+        if not os.path.exists(f"price_history_charts\\{datetime.datetime.now().strftime('%Y-%m-%d')}"):
+            os.makedirs(f"price_history_charts\\{datetime.datetime.now().strftime('%Y-%m-%d')}")
+        filename = "".join(x for x in nft_data['name'] if (x.isalnum() or x in "._- ")) + '.png'
+
+        fig.write_image(f"{folder}\\{filename}")
+
+def plot_collection_price_history(collection_id):
+    nf = nifty.NiftyDB()
+    nfts = nf.get_nfts_in_collection(collection_id)
+    for nft in nfts:
+        plot_price_history(nft['nftId'], save_file=True)
+
+# Clone Center
+#plot_collection_price_history("5ca146e6-01b2-45ad-8186-df8b2fd6a713")
+
+# Cyber Crew
+#plot_collection_price_history("f6ff0ed8-277a-4039-9c53-18d66b4c2dac")
+
+
+dump_nft_holders()

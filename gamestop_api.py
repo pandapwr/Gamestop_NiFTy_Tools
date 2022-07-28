@@ -211,6 +211,7 @@ class Nft:
             return self._add_datetime(data, from_timestamp=True)
 
         # If NFT not found in database, query the API
+        print(f"Querying API for NFT {self.nft_id}")
         if len(self.nft_id) > 100:
             api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
                        f"tokenIdAndContractAddress={self.nft_id}")
