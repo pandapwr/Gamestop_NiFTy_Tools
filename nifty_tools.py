@@ -26,6 +26,8 @@ CC_CLONE_CENTER = "15a15703-a3ed-4768-8d7a-5931025294ed"
 CC_CLONEBOT_STICKER = "b67b2a29-5931-4610-a157-607877340ea2"
 MB_ASTROBOY = "47400769-a0e8-4763-8f42-82e3566ff512"
 
+CC_NFTID_LIST = [CC_10_WORLDS, CC_CHROME_CANNON, CC_CLONE_CARD, CC_CAN_D, CC_CLONE, CC_CYBER_CYCLE, CC_LOADING_LEVEL, CC_CLONE_CENTER]
+
 CC_NFTDATA = ["0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01",
                   "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724",
                   "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca",
@@ -103,6 +105,8 @@ def grab_new_blocks():
     lr = loopring.LoopringAPI()
     nf = nifty.NiftyDB()
     last_block = nf.get_latest_saved_block()
+    if last_block is None:
+        last_block = 24340
     i = 1
     while True:
         print(f"Retrieving block {last_block+i}")
@@ -307,9 +311,26 @@ def plot_collections_cumulative_volume(collectionId_list):
         fig.update_yaxes(title_text="Volume (USD)", secondary_y=True)
     fig.show()
 
-plot_collections_cumulative_volume(['f6ff0ed8-277a-4039-9c53-18d66b4c2dac'])
+def grab_and_save_orders(nftId_list):
+    nf = nifty.NiftyDB()
+    snapshot_time = int(datetime.datetime.timestamp(datetime.datetime.utcnow()))
+    for nftId in nftId_list:
+        nft = Nft(nftId)
+        orders = nft.get_orders()
+        print(f"Pulled {len(orders)} orders for {nft.get_name()}")
+        for order in orders:
+            nf.insert_cc_order(order['orderId'], order['nftId'], order['collectionId'], order['nftData'],
+                               order['ownerAddress'], order['amount'], order['fulfilledAmount'], order['pricePerNft'],
+                               int(datetime.datetime.timestamp(order['createdAt'])), snapshot_time)
+
+
+
+
+#plot_collections_cumulative_volume(['f6ff0ed8-277a-4039-9c53-18d66b4c2dac'])
 
 grab_new_blocks()
+
+dump_nft_holders()
 
 #find_complete_collection_owners()
 # Clone Center

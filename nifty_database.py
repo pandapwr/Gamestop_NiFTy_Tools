@@ -49,6 +49,13 @@ class NiftyDB:
                        (blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd))
         self.conn.commit()
 
+    def insert_cc_order(self, orderId, nftId, collectionId, nftData, ownerAddress, amount, fulfilledAmount, price, createdAt, snapshotTime):
+        print("Inserting: ", orderId, nftId, collectionId, nftData, ownerAddress, amount, fulfilledAmount, price, createdAt, snapshotTime)
+        query = (f"INSERT INTO cybercrew_orders VALUES ('{orderId}', '{nftId}', '{collectionId}', '{nftData}', "
+                 f"'{ownerAddress}', {amount}, {fulfilledAmount}, {price}, {createdAt}, {snapshotTime})")
+        self.c.execute(query)
+        self.conn.commit()
+
     def check_if_block_exists(self, blockId):
         self.c.execute("SELECT * FROM transactions WHERE blockId=?", (blockId,))
         result = self.c.fetchone()
@@ -60,7 +67,10 @@ class NiftyDB:
     def get_latest_saved_block(self):
         self.c.execute("SELECT * FROM transactions ORDER BY blockId DESC LIMIT 1")
         result = self.c.fetchone()
-        return result['blockId']
+        if result is None:
+            return None
+        else:
+            return result['blockId']
 
     def get_last_historical_price_data(self, currency):
         self.c.execute("SELECT * FROM historical_crypto_prices WHERE currency=? ORDER BY timestamp DESC LIMIT 1", (currency,))
