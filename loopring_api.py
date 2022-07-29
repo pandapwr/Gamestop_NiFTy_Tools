@@ -144,3 +144,4 @@ class LoopringAPI:
             print(f"Saved block {blockData['blockId']} to database")
 
         db.close()
+

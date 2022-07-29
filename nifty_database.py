@@ -83,6 +83,7 @@ class NiftyDB:
         else:
             return result['price']
 
+
     def insert_historical_price_data(self, currency, dataFrame):
         for index in dataFrame.index:
 
@@ -119,6 +120,24 @@ class NiftyDB:
         else:
             return result
 
+    def get_user_trade_history(self, accountId, nftData_List=None):
+        query = "SELECT transactions.*, nfts.nftData, nfts.name, buyer.username as buyer, seller.username as seller " \
+                "FROM transactions " \
+                "INNER JOIN nfts on transactions.nftData = nfts.nftData " \
+                "INNER JOIN users as buyer on transactions.buyerAccount = buyer.accountId " \
+                "INNER JOIN users as seller on transactions.sellerAccount = seller.accountId " \
+                f"WHERE buyerAccount='{accountId}' OR sellerAccount='{accountId}' "
+        if nftData_List is not None:
+            formatted_nftData_List = ', '.join(['"%s"' % w for w in nftData_List])
+            query += f" AND transactions.nftData in ({formatted_nftData_List})"
+
+        self.c.execute(query)
+        result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
+
     def get_nft_trade_history(self, nft_id):
         nftData = self.get_nft_data(nft_id)['nftData']
 
@@ -132,4 +151,38 @@ class NiftyDB:
             return None
         else:
             return result
+
+    def get_nfts_in_collection(self, collectionId):
+        query = f"SELECT name, collectionId, nftId FROM nfts WHERE collectionId = '{collectionId}'"
+        self.c.execute(query)
+        result = self.c.fetchall()
+        if result is None:
+            print(f"No NFTs found for {collectionId} in database")
+            return None
+        else:
+            return result
+
+    def get_number_of_tx(self, nftData_List):
+        formatted_nftData_List = ', '.join(['"%s"' % w for w in nftData_List])
+        query = f"SELECT * FROM transactions WHERE nftData in ({formatted_nftData_List})"
+        self.c.execute(query)
+        result = self.c.fetchall()
+        if result is None:
+            return 0
+        else:
+            return len(result)
+
+    def get_nft_collection_tx(self, collectionId):
+        # Returns blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd, nftData2, collectionId
+        query = ("SELECT tx.*, nfts.nftData AS nftData2, nfts.collectionId FROM transactions AS tx "
+                 "INNER JOIN nfts ON nfts.nftData = tx.nftData "
+                 f"WHERE nfts.collectionId='{collectionId}' "
+                 "ORDER BY tx.blockId")
+        self.c.execute(query)
+        result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
+
 

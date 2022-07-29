@@ -26,6 +26,15 @@ CC_CLONE_CENTER = "15a15703-a3ed-4768-8d7a-5931025294ed"
 CC_CLONEBOT_STICKER = "b67b2a29-5931-4610-a157-607877340ea2"
 MB_ASTROBOY = "47400769-a0e8-4763-8f42-82e3566ff512"
 
+CC_NFTDATA = ["0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01",
+                  "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724",
+                  "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca",
+                  "0x2c4b4edd628bcffffbf4a9d434ce83e4737889b65eee922f00d3c2b2d82b3394",
+                  "0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf",
+                  "0x0d1a4f4d19f4aaaaf01cfc1eee2c24294653ab376fb0daf319ae6fdb2063c4a3",
+                  "0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3",
+                  "0x19562143481eeeea9051659e5a1aaf683cf71b09c522c71adebb827c20285100"]
+
 PT_STUDY = "4a0155d9-501e-477d-868c-c81d22d88ec2"
 PT_SEARCH = "6882580c-3336-44da-b6f1-225d7df71b3f"
 PT_DISCOVER = "8fc72668-c553-4c3e-a660-eed928ae5f40"
@@ -81,7 +90,7 @@ def update_historical_crypto_data(currency):
     nf.insert_historical_price_data(currency, data[1:])
     nf.close()
 
-def print_trade_history(nft_id, filename):
+def print_trade_history(nft_id):
     nf = nifty.NiftyDB()
     trade_history = nf.get_nft_trade_history(nft_id)
     for row in trade_history:
@@ -144,6 +153,165 @@ def plot_collection_price_history(collection_id):
     for nft in nfts:
         plot_price_history(nft['nftId'], save_file=True)
 
+def find_complete_collection_owners():
+    CC_NFTDATA = ["0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01",
+                  "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724",
+                  "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca",
+                  "0x2c4b4edd628bcffffbf4a9d434ce83e4737889b65eee922f00d3c2b2d82b3394",
+                  "0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf",
+                  "0x0d1a4f4d19f4aaaaf01cfc1eee2c24294653ab376fb0daf319ae6fdb2063c4a3",
+                  "0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3"]
+    CLONE_CENTER_NFTDATA = "0x19562143481eeeea9051659e5a1aaf683cf71b09c522c71adebb827c20285100"
+    CREATOR_CARD = "0x536aef4e627039cedbee1094254cedd612808e9a73c22c43144b480a776ecb22"
+    FLAIR_DROP = "0x055319aa29a9962506a25aa3b200f7df303b701bb791e2a57c84fa9c94a0e93c"
+    lr = loopring.LoopringAPI()
+    _, owners = lr.get_nft_holders(Nft(CC_10_WORLDS).data['nftData'])
+
+    for owner in owners:
+        owned = User(owner['user']).get_owned_nfts_lr()
+
+        num_owned = 0
+        cc_owned = 0
+        creator_owned = 0
+        flairdrop_owned = 0
+        for nft in owned:
+            if any(nft['nftData'] == x for x in CC_NFTDATA):
+                num_owned += 1
+            if nft['nftData'] == CLONE_CENTER_NFTDATA:
+                cc_owned = 1
+            if nft['nftId'] == CREATOR_CARD:
+                creator_owned = 1
+            if nft['nftData'] == FLAIR_DROP:
+                flairdrop_owned = 1
+
+
+        if num_owned == 7:
+            num_owned += cc_owned
+            creator_string = ""
+            flairdrop_string = ""
+            if creator_owned:
+                creator_string = " + creator card"
+            if flairdrop_owned:
+                flairdrop_string = " + flair drop"
+            print(f"{owner['user']} owns {num_owned}/7{creator_string}{flairdrop_string}")
+
+def get_user_trade_history(username):
+    CC_NFTDATA = ["0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01",
+                  "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724",
+                  "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca",
+                  "0x2c4b4edd628bcffffbf4a9d434ce83e4737889b65eee922f00d3c2b2d82b3394",
+                  "0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf",
+                  "0x0d1a4f4d19f4aaaaf01cfc1eee2c24294653ab376fb0daf319ae6fdb2063c4a3",
+                  "0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3",
+                  "0x19562143481eeeea9051659e5a1aaf683cf71b09c522c71adebb827c20285100"]
+    user = User(username=username)
+    nf = nifty.NiftyDB()
+    trade_history = nf.get_user_trade_history(user.accountId)
+
+def generate_cc_report():
+    nf = nifty.NiftyDB()
+    num_tx = nf.get_number_of_tx(CC_NFTDATA)
+    print(f"Cyber Crew has {num_tx} transactions")
+
+def plot_nft_collection_transaction_history(collection_id):
+    pass
+
+def plot_users_transaction_history(user_id):
+    user = User(user_id)
+    nf = nifty.NiftyDB()
+    trade_history = nf.get_user_trade_history(user.accountId, CC_NFTDATA)
+    df = pd.DataFrame(trade_history, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount',
+                                              'buyerAccount', 'amount', 'price', 'priceUsd', 'nftData2', 'name',
+                                              'buyer', 'seller'])
+    df.createdAt = pd.to_datetime(df.createdAt, unit='s')
+    df.set_index('createdAt')
+
+    df_clone_card_buy = df[(df['nftData'] == "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724") & (df['buyerAccount'] == user.accountId)]
+    df_clone_buy = df[(df['nftData'] == "0x2c4b4edd628bcffffbf4a9d434ce83e4737889b65eee922f00d3c2b2d82b3394") & (df['buyerAccount'] == user.accountId)]
+    df_10_worlds_buy = df[(df['nftData'] == "0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01") & (df['buyerAccount'] == user.accountId)]
+    df_cand_buy = df[(df['nftData'] == "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca") & (df['buyerAccount'] == user.accountId)]
+    df_cyber_cycle_buy = df[(df['nftData'] == "0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf") & (df['buyerAccount'] == user.accountId)]
+    df_loading_level_buy = df[(df['nftData'] == "0x0d1a4f4d19f4aaaaf01cfc1eee2c24294653ab376fb0daf319ae6fdb2063c4a3") & (df['buyerAccount'] == user.accountId)]
+    df_chrome_cannon_buy = df[(df['nftData'] == "0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3") & (df['buyerAccount'] == user.accountId)]
+
+    df_clone_card_sell = df[(df['nftData'] == "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724") & (df['sellerAccount'] == user.accountId)]
+    df_clone_sell = df[(df['nftData'] == "0x2c4b4edd628bcffffbf4a9d434ce83e4737889b65eee922f00d3c2b2d82b3394") & (df['sellerAccount'] == user.accountId)]
+    df_10_worlds_sell = df[(df['nftData'] == "0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01") & (df['sellerAccount'] == user.accountId)]
+    df_cand_sell = df[(df['nftData'] == "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca") & (df['sellerAccount'] == user.accountId)]
+    df_cyber_cycle_sell = df[(df['nftData'] == "0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf") & (df['sellerAccount'] == user.accountId)]
+    df_loading_level_sell = df[(df['nftData'] == "0x0d1a4f4d19f4aaaaf01cfc1eee2c24294653ab376fb0daf319ae6fdb2063c4a3") & (df['sellerAccount'] == user.accountId)]
+    df_chrome_cannon_sell = df[(df['nftData'] == "0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3") & (df['sellerAccount'] == user.accountId)]
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    base_size = 20
+
+    
+    fig.add_scatter(x=df_clone_card_buy.createdAt, y=df_clone_card_buy['price'], name="Clone Card", mode='markers+lines',
+                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
+    fig.add_scatter(x=df_clone_buy.createdAt, y=df_clone_buy['price'], name="Clone", mode='markers+lines',
+                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
+    fig.add_scatter(x=df_10_worlds_buy.createdAt, y=df_10_worlds_buy['price'], name="10 Worlds", mode='markers+lines',
+                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
+    fig.add_scatter(x=df_cand_buy.createdAt, y=df_cand_buy['price'], name="Candidate", mode='markers+lines',
+                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
+    fig.add_scatter(x=df_cyber_cycle_buy.createdAt, y=df_cyber_cycle_buy['price'], name="Cyber Cycle", mode='markers+lines',
+                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
+    fig.add_scatter(x=df_loading_level_buy.createdAt, y=df_loading_level_buy['price'], name="Loading Level", mode='markers+lines',
+                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
+    fig.add_scatter(x=df_chrome_cannon_buy.createdAt, y=df_chrome_cannon_buy['price'], name="Chrome Cannon", mode='markers+lines',
+                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
+
+    fig.add_scatter(x=df_clone_card_sell.createdAt, y=df_clone_card_sell['price'], name="Clone Card (Sell)", mode='markers+lines',
+                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
+    fig.add_scatter(x=df_clone_sell.createdAt, y=df_clone_sell['price'], name="Clone (Sell)", mode='markers+lines',
+                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
+    fig.add_scatter(x=df_10_worlds_sell.createdAt, y=df_10_worlds_sell['price'], name="10 Worlds (Sell)", mode='markers+lines',
+                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
+    fig.add_scatter(x=df_cand_sell.createdAt, y=df_cand_sell['price'], name="CAN-D (Sell)", mode='markers+lines',
+                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
+    fig.add_scatter(x=df_cyber_cycle_sell.createdAt, y=df_cyber_cycle_sell['price'], name="Cyber Cycle (Sell)", mode='markers+lines',
+                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
+    fig.add_scatter(x=df_loading_level_sell.createdAt, y=df_loading_level_sell['price'], name="Loading Level (Sell)",
+                    mode='markers+lines', marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
+    fig.add_scatter(x=df_chrome_cannon_sell.createdAt, y=df_chrome_cannon_sell['price'], name="Chrome Cannon (Sell)",
+                    mode='markers+lines', marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
+
+    fig.update_layout(title_text=f"{user.username}'s Transaction History")
+    fig.update_xaxes(title_text="Date")
+    fig.update_yaxes(title_text="Price", secondary_y=False)
+    fig.show()
+
+
+def plot_collections_cumulative_volume(collectionId_list):
+    nf = nifty.NiftyDB()
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    for collection in collectionId_list:
+        data = nf.get_nft_collection_tx(collection)
+        # Returns blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd, nftData2, collectionId
+        df = pd.DataFrame(data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
+                                         'amount', 'price', 'priceUsd', 'nftData2', 'collectionId'])
+        df.createdAt = pd.to_datetime(df.createdAt, unit='s')
+        df.set_index('createdAt')
+        df['volume'] = df['amount'] * df['price']
+        df['volume_usd'] = df['amount'] * df['priceUsd']
+
+        fig.add_scatter(x=df.createdAt, y=df.volume.cumsum(), name="Cyber Crew Volume (ETH)", secondary_y=False)
+        fig.add_scatter(x=df.createdAt, y=df.volume_usd.cumsum(), name="Cyber Crew Volume (USD)", mode='lines', secondary_y=True)
+
+        #fig = px.line(x=df.createdAt, y=df.volume.cumsum(), title="Cyber Crew Volume (ETH)")
+
+        fig.update_layout(title_text=f"Cyber Crew Cumulative Volume - {datetime.datetime.now().strftime('%Y-%m-%d')}")
+        fig.update_xaxes(title_text="Date")
+        fig.update_yaxes(title_text="Volume (ETH)", secondary_y=False)
+        fig.update_yaxes(title_text="Volume (USD)", secondary_y=True)
+    fig.show()
+
+plot_collections_cumulative_volume(['f6ff0ed8-277a-4039-9c53-18d66b4c2dac'])
+
+grab_new_blocks()
+
+#find_complete_collection_owners()
 # Clone Center
 #plot_collection_price_history("5ca146e6-01b2-45ad-8186-df8b2fd6a713")
 
@@ -151,4 +319,4 @@ def plot_collection_price_history(collection_id):
 #plot_collection_price_history("f6ff0ed8-277a-4039-9c53-18d66b4c2dac")
 
 
-dump_nft_holders()
+#dump_nft_holders()

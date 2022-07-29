@@ -454,7 +454,7 @@ class User:
         if address is not None:
             self.accountId, self.address, self.username = self.db.get_user_info(address=address)
         else:
-            self.accountId, self.address, self.username = self.db.get_user_info(address=address)
+            self.accountId, self.address, self.username = self.db.get_user_info(username=username)
 
         if self.accountId is None:
             if username is not None:
@@ -518,8 +518,8 @@ class User:
 
         return len(self.created_collections)
 
-    def get_owned_nfts_lr(self, apiKey):
-        lr = loopring.LoopringAPI(apiKey)
+    def get_owned_nfts_lr(self):
+        lr = loopring.LoopringAPI()
         account_id = lr.get_accountId_from_address(self.address)
         nfts = lr.get_user_nft_balance(account_id)
         return nfts
