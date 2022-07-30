@@ -18,6 +18,10 @@ class NiftyDB:
     def close(self):
         self.conn.close()
 
+    def vacuum(self):
+        self.c.execute("VACUUM")
+        self.conn.close()
+
     def get_user_info(self, accountId=None, address=None, username=None):
         if address is not None:
             self.c.execute("SELECT * FROM users WHERE address=?", (address,))
@@ -136,10 +140,14 @@ class NiftyDB:
                 "INNER JOIN nfts on transactions.nftData = nfts.nftData " \
                 "INNER JOIN users as buyer on transactions.buyerAccount = buyer.accountId " \
                 "INNER JOIN users as seller on transactions.sellerAccount = seller.accountId " \
-                f"WHERE buyerAccount='{accountId}' OR sellerAccount='{accountId}' "
+                f"WHERE buyerAccount='{accountId}' OR sellerAccount='{accountId}' " \
+
         if nftData_List is not None:
             formatted_nftData_List = ', '.join(['"%s"' % w for w in nftData_List])
             query += f" AND transactions.nftData in ({formatted_nftData_List})"
+
+        query += f"ORDER BY transactions.blockId DESC"
+        print(f"Query: {query}")
 
         self.c.execute(query)
         result = self.c.fetchall()
@@ -195,4 +203,12 @@ class NiftyDB:
         else:
             return result
 
+    def get_orderbook_data(self, nftId):
+        query = f"SELECT * FROM cybercrew_orders WHERE nftId='{nftId}' ORDER BY snapshotTime"
+        self.c.execute(query)
+        result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
 

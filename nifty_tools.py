@@ -129,8 +129,11 @@ def plot_price_history(nft_id, save_file=False):
     data = nf.get_nft_trade_history(nft_id)
     df = pd.DataFrame(data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
                                      'amount', 'price', 'priceUsd', 'seller', 'buyer'])
+    df.drop(df[df.txType != "SpotTrade"].index, inplace=True)
     df.createdAt = pd.to_datetime(df.createdAt, unit='s')
     df.set_index('createdAt')
+    df = df.loc[df['txType'] == 'SpotTrade']
+
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
@@ -149,7 +152,7 @@ def plot_price_history(nft_id, save_file=False):
             os.makedirs(f"price_history_charts\\{datetime.datetime.now().strftime('%Y-%m-%d')}")
         filename = "".join(x for x in nft_data['name'] if (x.isalnum() or x in "._- ")) + '.png'
 
-        fig.write_image(f"{folder}\\{filename}")
+        fig.write_image(f"{folder}\\{filename}",width=800, height=600)
 
 def plot_collection_price_history(collection_id):
     nf = nifty.NiftyDB()
@@ -220,7 +223,28 @@ def generate_cc_report():
 def plot_nft_collection_transaction_history(collection_id):
     pass
 
-def plot_users_transaction_history(user_id):
+def print_user_transaction_history(username=None, address=None):
+    if address is not None:
+        user = User(address=address)
+    else:
+        user = User(username=username)
+    nf = nifty.NiftyDB()
+    trade_history = nf.get_user_trade_history(user.accountId, CC_NFTDATA)
+
+    for row in trade_history:
+        time = datetime.datetime.fromtimestamp(row['createdAt'])
+        if row['txType'] == 'Transfer':
+            if row['buyerAccount'] == user.accountId:
+                print(f"{time} {row['buyer']} transferred {row['amount']}x to {row['seller']}")
+            elif row['sellerAccount'] == user.accountId:
+                print(f"{time} {row['seller']} transferred {row['amount']}x to {row['buyer']}")
+        elif row['txType'] == 'SpotTrade':
+            if row['buyerAccount'] == user.accountId:
+                print(f"{time} {row['buyer']} bought {row['amount']}x {row['name']} from {row['seller']} at {row['price']} (${row['priceUsd']})")
+            if row['sellerAccount'] == user.accountId:
+                print(f"{time} {row['seller']} sold {row['amount']}x {row['name']} to {row['buyer']} at {row['price']} (${row['priceUsd']})")
+
+def plot_user_transaction_history(user_id):
     user = User(user_id)
     nf = nifty.NiftyDB()
     trade_history = nf.get_user_trade_history(user.accountId, CC_NFTDATA)
@@ -328,9 +352,9 @@ def grab_and_save_orders(nftId_list):
 
 #plot_collections_cumulative_volume(['f6ff0ed8-277a-4039-9c53-18d66b4c2dac'])
 
-grab_new_blocks()
+#grab_new_blocks()
 
-dump_nft_holders()
+#dump_nft_holders()
 
 #find_complete_collection_owners()
 # Clone Center

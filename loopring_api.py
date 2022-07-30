@@ -108,7 +108,22 @@ class LoopringAPI:
     def get_pending(self):
         api_url = "https://api3.loopring.io/api/v3/block/getPendingRequests"
         response = self.lr.get(api_url).json()
-        return response
+
+        nft_txs = dict()
+        nft_txs['transactions'] = []
+
+        spot_trades = [tx for tx in response if tx['txType'] == 'SpotTrade']
+        spot_trades_nft = [tx for tx in spot_trades if tx['orderA']['nftData'] != '']
+        nft_txs['transactions'].extend(spot_trades_nft)
+
+        transfers = [tx for tx in response if tx['txType'] == 'Transfer']
+        transfers_nft = [tx for tx in transfers if tx['token']['nftData'] != '']
+        nft_txs['transactions'].extend(transfers_nft)
+
+        mints = [tx for tx in response if tx['txType'] == 'NftMint']
+        mints_nft = [tx for tx in mints if tx['nftToken']['nftData'] != '']
+        nft_txs['transactions'].extend(mints_nft)
+        return nft_txs
 
     # Grabs the given block and filters for transactions with nftData
     def filter_nft_txs(self, blockId):
@@ -148,7 +163,7 @@ class LoopringAPI:
                     price = float(tx['orderA']['amountS']) / 10 ** 18 / float(tx['orderA']['amountB'])
                     db.insert_transaction(blockData['blockId'], created, tx['txType'],
                                           tx['orderA']['nftData'], tx['orderB']['accountID'], tx['orderA']['accountID'],
-                                          tx['orderA']['amountB'], price, round(price*block_price,2))
+                                          tx['orderB']['fillS'], price, round(price*block_price,2))
                 elif tx['txType'] == 'Transfer':
                     db.insert_transaction(blockData['blockId'], created, tx['txType'],
                                           tx['token']['nftData'], tx['accountId'], tx['toAccountId'],
