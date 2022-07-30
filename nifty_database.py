@@ -2,11 +2,11 @@ import sqlite3
 import pandas as pd
 import gamestop_api
 
-db_path = "niftyDB.db"
+db_path = "niftyDB2.db"
 
 
 class NiftyDB:
-    def __init__(self, db_path="niftyDB.db"):
+    def __init__(self, db_path=db_path):
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
