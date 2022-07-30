@@ -129,6 +129,8 @@ def plot_price_history(nft_id, save_file=False):
     data = nf.get_nft_trade_history(nft_id)
     df = pd.DataFrame(data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
                                      'amount', 'price', 'priceUsd', 'seller', 'buyer'])
+    # Drop rows not containing trade data
+    df.drop(df[df.txType != "SpotTrade"].index, inplace=True)
     df.createdAt = pd.to_datetime(df.createdAt, unit='s')
     df.set_index('createdAt')
 
@@ -334,10 +336,10 @@ dump_nft_holders()
 
 #find_complete_collection_owners()
 # Clone Center
-#plot_collection_price_history("5ca146e6-01b2-45ad-8186-df8b2fd6a713")
+# plot_collection_price_history("5ca146e6-01b2-45ad-8186-df8b2fd6a713")
 
 # Cyber Crew
-#plot_collection_price_history("f6ff0ed8-277a-4039-9c53-18d66b4c2dac")
+# plot_collection_price_history("f6ff0ed8-277a-4039-9c53-18d66b4c2dac")
 
 
 #dump_nft_holders()
