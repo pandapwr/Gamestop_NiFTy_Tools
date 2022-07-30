@@ -2,7 +2,7 @@ import sqlite3
 import pandas as pd
 import gamestop_api
 
-db_path = "niftyDB2.db"
+db_path = "niftyDB.db"
 
 
 class NiftyDB:
