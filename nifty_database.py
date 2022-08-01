@@ -89,10 +89,11 @@ class NiftyDB:
         end = timestamp + 500
         query = f"SELECT * FROM historical_crypto_prices WHERE currency='{currency}' AND timestamp " \
                 f"BETWEEN {start} AND {end} ORDER BY timestamp DESC"
-        print(f"Query: {query}")
+        #print(f"Query: {query}")
         self.c.execute(query)
         result = self.c.fetchone()
         if result is None:
+            print(f"No historical price data found for {currency} at {timestamp}")
             return None
         else:
             return result['price']
@@ -204,11 +205,47 @@ class NiftyDB:
             return result
 
     def get_orderbook_data(self, nftId):
-        query = f"SELECT * FROM cybercrew_orders WHERE nftId='{nftId}' ORDER BY snapshotTime"
+        # First, get the available snapshot times
+        query = f"SELECT cc.nftId, cc.snapshotTime from cybercrew_orders AS cc GROUP BY snapshotTime ORDER BY snapshotTime"
+        self.c.execute(query)
+        snapshotTimes = self.c.fetchall()
+
+        # Then, get the orderbook data
+        query = "SELECT users.username, cc.ownerAddress, cc.amount, cc.price, cc.orderId, cc.fulfilledAmount," \
+                " nfts.name, cc.nftId, cc.snapshotTime from cybercrew_orders AS cc " \
+                "INNER JOIN users ON cc.ownerAddress = users.address " \
+                "INNER JOIN nfts ON nfts.nftId = cc.nftId " \
+                "ORDER BY snapshotTime"
         self.c.execute(query)
         result = self.c.fetchall()
         if result is None:
             return None
         else:
-            return result
+            return snapshotTimes, result
+
+
+
+        '''
+        # First, get the available snapshot times
+        query = f"SELECT cc.nftId, cc.snapshotTime from cybercrew_orders AS cc GROUP BY snapshotTime ORDER BY snapshotTime"
+        self.c.execute(query)
+        snapshotTimes = self.c.fetchall()
+
+        orderbook = []
+        # Retrieve order data for each snapshot time
+        for snapshot in snapshotTimes:
+            orders = dict()
+            query = f"SELECT cc.nftId, cc.amount, cc.fulfilledAmount, cc.price from cybercrew_orders AS cc " \
+                    f"WHERE nftId='{nftId}' AND snapshotTime='{snapshot['snapshotTime']}'"
+            self.c.execute(query)
+            snapshotData = self.c.fetchall()
+            for order in snapshotData:
+                orders[order['price']] = order
+            orderbook.append(orders)
+            for
+            orders['snapshotTime'] = snapshot['snapshotTime']
+            orders['orders'] = snapshotData
+        '''
+
+
 

@@ -248,8 +248,8 @@ class Nft:
             order['pricePerNft'] = float(order['pricePerNft']) / 10 ** 18
             if order['pricePerNft'] < lowest_price:
                 lowest_price = order['pricePerNft']
-            order['createdAt'] = datetime.strptime(order['createdAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
-            order['updatedAt'] = datetime.strptime(order['updatedAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
+            order['createdAt'] = datetime.strptime(order['createdAt'], "%Y-%m-%dT%H:%M:%S.%f%z")
+            order['updatedAt'] = datetime.strptime(order['updatedAt'], "%Y-%m-%dT%H:%M:%S.%f%z")
             order['validUntil'] = datetime.fromtimestamp(order['validUntil'])
         self.orders = response
         if lowest_price == 100000000:

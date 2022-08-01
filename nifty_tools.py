@@ -134,11 +134,15 @@ def plot_price_history(nft_id, save_file=False):
     df.set_index('createdAt')
     df = df.loc[df['txType'] == 'SpotTrade']
 
+    floor_df = get_floor_price_history(nft_id)
+
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    fig.add_scatter(x=df.createdAt, y=df.price, name='Price', secondary_y=False)
-    fig.add_scatter(x=df.createdAt, y=df.priceUsd, name='Price USD', secondary_y=True)
+    fig.add_scatter(x=df.createdAt, y=df.price, name='Price', secondary_y=False, mode='lines+markers', marker=dict(opacity=0.5))
+    fig.add_scatter(x=df.createdAt, y=df.priceUsd, name='Price USD', secondary_y=True, mode='lines+markers', marker=dict(opacity=0.5))
+    fig.add_scatter(x=floor_df.snapshotTime, y=floor_df.floor_price, name='Floor Price', secondary_y=False)
+    fig.add_scatter(x=floor_df.snapshotTime, y=floor_df.floor_price_usd, name='Floor Price USD', secondary_y=True)
 
     fig.update_layout(title_text=f"{nft_data['name']} Price History - {datetime.datetime.now().strftime('%Y-%m-%d')}")
     fig.update_xaxes(title_text="Date")
@@ -152,7 +156,7 @@ def plot_price_history(nft_id, save_file=False):
             os.makedirs(f"price_history_charts\\{datetime.datetime.now().strftime('%Y-%m-%d')}")
         filename = "".join(x for x in nft_data['name'] if (x.isalnum() or x in "._- ")) + '.png'
 
-        fig.write_image(f"{folder}\\{filename}",width=800, height=600)
+        fig.write_image(f"{folder}\\{filename}",width=2000, height=1200)
 
 def plot_collection_price_history(collection_id):
     nf = nifty.NiftyDB()
@@ -274,7 +278,7 @@ def plot_user_transaction_history(user_id):
 
     base_size = 20
 
-    
+
     fig.add_scatter(x=df_clone_card_buy.createdAt, y=df_clone_card_buy['price'], name="Clone Card", mode='markers+lines',
                     marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
     fig.add_scatter(x=df_clone_buy.createdAt, y=df_clone_buy['price'], name="Clone", mode='markers+lines',
@@ -337,7 +341,7 @@ def plot_collections_cumulative_volume(collectionId_list):
 
 def grab_and_save_orders(nftId_list):
     nf = nifty.NiftyDB()
-    snapshot_time = int(datetime.datetime.timestamp(datetime.datetime.utcnow()))
+    snapshot_time = int(datetime.datetime.timestamp(datetime.datetime.now()))
     for nftId in nftId_list:
         nft = Nft(nftId)
         orders = nft.get_orders()
@@ -347,6 +351,39 @@ def grab_and_save_orders(nftId_list):
                                order['ownerAddress'], order['amount'], order['fulfilledAmount'], order['pricePerNft'],
                                int(datetime.datetime.timestamp(order['createdAt'])), snapshot_time)
 
+def get_floor_price_history(nftId):
+    nf = nifty.NiftyDB()
+    snapshotTimes, orderbook = nf.get_orderbook_data(nftId)
+    df = pd.DataFrame(orderbook, columns=['username', 'address', 'amount', 'price', 'orderId', 'fullfilledAmount',
+                                          'nft_name', 'nftId', 'snapshotTime'])
+    floor_price_history = []
+    for snapshot in snapshotTimes:
+        df_snapshot = df[df['snapshotTime'] == snapshot['snapshotTime']]
+        df_nft_snapshot = df_snapshot[df_snapshot['nftId'] == nftId]
+        floor_price = df_nft_snapshot['price'].min()
+        eth_price = nf.get_historical_price('ETH', snapshot['snapshotTime'])
+        if eth_price is None:
+            print(snapshot['snapshotTime'])
+        floor_price_usd = round(floor_price * nf.get_historical_price('ETH', snapshot['snapshotTime']), 2)
+        floor_price_history.append([snapshot['snapshotTime'], floor_price, floor_price_usd])
+
+    floor_df = pd.DataFrame(floor_price_history, columns=['snapshotTime', 'floor_price', 'floor_price_usd'])
+    floor_df.set_index('snapshotTime')
+    floor_df['snapshotTime'] = pd.to_datetime(floor_df['snapshotTime'], unit='s')
+
+    return floor_df
+
+def get_latest_orderbook_data(nftId):
+    nf = nifty.NiftyDB()
+    snapshotTimes, orderbook = nf.get_orderbook_data(nftId)
+    df = pd.DataFrame(orderbook, columns=['username', 'address', 'amount', 'price', 'orderId', 'fullfilledAmount',
+                                          'nft_name', 'nftId', 'snapshotTime'])
+    df.set_index('snapshotTime')
+    df = df[df['snapshotTime'] == snapshotTimes[-1]['snapshotTime']]
+    #df['snapshotTime'] = pd.to_datetime(df['snapshotTime'], unit='s', utc=False)
+
+    print(df)
+    return df
 
 
 
