@@ -5,7 +5,10 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from PIL import Image
+import matplotlib.pyplot as plt
 import kaleido
+import networkx as nx
 import loopring_api as loopring
 from gamestop_api import User, Nft, NftCollection, GamestopApi
 from Historic_Crypto import HistoricalData
@@ -122,7 +125,7 @@ def grab_new_blocks():
             break
 
 # Plot price history using pandas
-def plot_price_history(nft_id, save_file=False):
+def plot_price_history(nft_id, save_file=False, bg_img=None):
     nft = Nft(nft_id)
     nf = nifty.NiftyDB()
     nft_data = nf.get_nft_data(nft_id)
@@ -150,8 +153,23 @@ def plot_price_history(nft_id, save_file=False):
     fig.update_yaxes(title_text="Price", secondary_y=False)
     fig.update_yaxes(title_text="Price USD", secondary_y=True)
     '''
-
     fig = go.Figure()
+    if bg_img:
+        bg_img = Image.open(f'images\{bg_img}.png')
+        fig.add_layout_image(
+            dict(
+                source=bg_img,
+                xref="x",
+                yref="y",
+                x=0,
+                y=3,
+                sizex=2,
+                sizey=2,
+                sizing="stretch",
+                opacity=0.5,
+                layer="below")
+        )
+
     fig.add_trace(go.Scatter(x=df.createdAt, y=df.price, name='Price (ETH)', mode='lines+markers',
                     marker=dict(opacity=0.5)))
     fig.add_trace(go.Scatter(x=df.createdAt, y=df.priceUsd, name='Price (USD)', mode='lines+markers',
@@ -159,6 +177,8 @@ def plot_price_history(nft_id, save_file=False):
     fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price, name='Floor Price', ))
     fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price_usd, name='Floor Price USD', yaxis="y2"))
     fig.add_trace(go.Histogram(x=df.createdAt, name='Volume', texttemplate="%{value}", opacity=0.4, textangle=0, yaxis="y3"))
+
+
     fig.update_layout(xaxis=dict(domain=[0, 0.95]), yaxis=dict(title="Price", side="right", position=0.95),
                       yaxis2=dict(title="Price USD", overlaying="y", side="right", position=1),
                       yaxis3=dict(title="Volume", overlaying="y"),
@@ -167,6 +187,7 @@ def plot_price_history(nft_id, save_file=False):
                       template="plotly_dark")
 
     fig.show()
+
 
     if save_file:
         folder = f"price_history_charts\\{datetime.datetime.now().strftime('%Y-%m-%d')}"
@@ -461,9 +482,165 @@ def analyze_latest_orderbook(nftId, next_goal, use_live_data=False):
     print(f"Number for sale before {next_goal} ETH: {til_next_goal}")
 
 
+def plot_trade_tree(nftId):
+    nf = nifty.NiftyDB()
+    nft_name = Nft(nftId).get_name()
+    G = nx.Graph()
+    trade_data = nf.get_nft_trade_history(nftId)
+    df = pd.DataFrame(trade_data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
+                      'amount', 'price', 'priceUsd', 'seller', 'buyer'])
+    for index, row in df.iterrows():
+        G.add_node(row['sellerAccount'])
+        #G._node[row['sellerAccount']]['name'] = row['seller']
+    for index, row in df.iterrows():
+        G.add_edge(row['sellerAccount'], row['buyerAccount'])
+    print(nx.info(G))
+
+    pos = nx.spring_layout(G)
+    for node in G.nodes():
+        G._node[node]['pos'] = pos[node]
+
+    edge_x = []
+    edge_y = []
+    for edge in G.edges():
+
+        x0, y0 = G.nodes[edge[0]]['pos']
+        x1, y1 = G.nodes[edge[1]]['pos']
+        edge_x.append(x0)
+        edge_x.append(x1)
+        edge_x.append(None)
+        edge_y.append(y0)
+        edge_y.append(y1)
+        edge_y.append(None)
+
+    edge_trace = go.Scatter(
+        x=edge_x, y=edge_y,
+        line=dict(width=0.5, color='#888'),
+        hoverinfo='none',
+        mode='lines')
+
+    node_x = []
+    node_y = []
+    for node in G.nodes():
+        x, y = G.nodes[node]['pos']
+        node_x.append(x)
+        node_y.append(y)
+
+    node_trace = go.Scatter(
+        x=node_x, y=node_y,
+        mode='markers',
+        hoverinfo='text',
+        marker=dict(
+            showscale=True,
+            # colorscale options
+            # 'Greys' | 'YlGnBu' | 'Greens' | 'YlOrRd' | 'Bluered' | 'RdBu' |
+            # 'Reds' | 'Blues' | 'Picnic' | 'Rainbow' | 'Portland' | 'Jet' |
+            # 'Hot' | 'Blackbody' | 'Earth' | 'Electric' | 'Viridis' |
+            colorscale='YlGnBu',
+            reversescale=True,
+            color=[],
+            size=10,
+            colorbar=dict(
+                thickness=15,
+                title='Node Connections',
+                xanchor='left',
+                titleside='right'
+            ),
+            line_width=2))
+
+    node_adjacencies = []
+    node_text = []
+    for node, adjacencies in enumerate(G.adjacency()):
+        node_adjacencies.append(len(adjacencies[1]))
+        node_text.append('# of connections: ' + str(len(adjacencies[1])))
+
+    node_trace.marker.color = node_adjacencies
+    node_trace.text = node_text
+
+    fig = go.Figure(data=[edge_trace, node_trace],
+                    layout=go.Layout(
+                        title='<br>Network graph made with Python',
+                        titlefont_size=16,
+                        showlegend=False,
+                        hovermode='closest',
+                        margin=dict(b=20, l=5, r=5, t=40),
+                        annotations=[dict(
+                            text=f"{nft_name}",
+                            showarrow=False,
+                            xref="paper", yref="paper",
+                            x=0.005, y=-0.002)],
+                        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
+                    )
+    fig.show()
+
+def analyze_cost_basis(nftId):
+    nf = nifty.NiftyDB()
+    nft_name = Nft(nftId).get_name()
+    trade_data = nf.get_nft_trade_history(nftId)
+    df = pd.DataFrame(trade_data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
+                      'amount', 'price', 'priceUsd', 'seller', 'buyer'])
+    mint_buyers = df[df['sellerAccount'] == 92477]
+    buyers_dict = dict()
+    for index, buyer in mint_buyers.iterrows():
+        if buyer['buyerAccount'] in buyers_dict:
+            buyers_dict[buyer['buyerAccount']]['amount'] += buyer['amount']
+            buyers_dict[buyer['buyerAccount']]['amount_paid'] += buyer['price'] * buyer['amount']
+            buyers_dict[buyer['buyerAccount']]['amount_paid_usd'] += buyer['priceUsd'] * buyer['amount']
+        else:
+            buyer_info = dict()
+            buyer_info['account'] = buyer['buyerAccount']
+            buyer_info['name'] = buyer['buyer']
+            buyer_info['amount'] = buyer['amount']
+            buyer_info['amount_paid'] = buyer['price'] * buyer['amount']
+            buyer_info['amount_paid_usd'] = buyer['priceUsd'] * buyer['amount']
+            buyer_info['profits'] = -1*buyer['price']*buyer['amount']
+            buyer_info['profits_usd'] = -1*buyer['priceUsd']*buyer['amount']
+            buyer_info['cost_basis'] = buyer['price']
+            buyer_info['cost_basis_usd'] = buyer['priceUsd']
+            buyers_dict[buyer['buyerAccount']] = buyer_info
+
+    # For each of the mint buyers, add any additional purchases and subtract any sales from their holdings
+    for mint_buyer in buyers_dict:
+        # Add the purchases
+        mint_buyer_purchases = df[df['buyerAccount'] == mint_buyer]
+        for index, purchase in mint_buyer_purchases.iterrows():
+            buyers_dict[mint_buyer]['amount'] += purchase['amount']
+            buyers_dict[mint_buyer]['amount_paid'] += purchase['price'] * purchase['amount']
+            buyers_dict[mint_buyer]['amount_paid_usd'] += purchase['priceUsd'] * purchase['amount']
+            buyers_dict[mint_buyer]['profits'] -= purchase['price'] * purchase['amount']
+            buyers_dict[mint_buyer]['profits_usd'] -= purchase['priceUsd'] * purchase['amount']
+            buyers_dict[mint_buyer]['cost_basis'] = buyers_dict[mint_buyer]['amount_paid'] / buyers_dict[mint_buyer]['amount']
+            buyers_dict[mint_buyer]['cost_basis_usd'] = buyers_dict[mint_buyer]['amount_paid_usd'] / buyers_dict[mint_buyer]['amount']
+
+        # Subtract the sales
+        mint_buyer_sales = df[df['sellerAccount'] == mint_buyer]
+        for index, sale in mint_buyer_sales.iterrows():
+            buyers_dict[mint_buyer]['amount'] -= sale['amount']
+            buyers_dict[mint_buyer]['amount_paid'] -= sale['price'] * sale['amount']
+            buyers_dict[mint_buyer]['amount_paid_usd'] -= sale['priceUsd'] * sale['amount']
+            buyers_dict[mint_buyer]['profits'] += sale['price'] * sale['amount']
+            buyers_dict[mint_buyer]['profits_usd'] += sale['priceUsd'] * sale['amount']
+            if buyers_dict[mint_buyer]['amount'] > 0:
+                buyers_dict[mint_buyer]['cost_basis'] = buyers_dict[mint_buyer]['amount_paid'] / buyers_dict[mint_buyer]['amount']
+                buyers_dict[mint_buyer]['cost_basis_usd'] = buyers_dict[mint_buyer]['amount_paid_usd'] / buyers_dict[mint_buyer]['amount']
+            else:
+                buyers_dict[mint_buyer]['cost_basis'] = 0
+                buyers_dict[mint_buyer]['cost_basis_usd'] = 0
+
+        if buyers_dict[mint_buyer]['amount'] == 0:
+
+            print(f"{buyers_dict[mint_buyer]['name']} sold all of their {nft_name} and cashed out with a profit of "
+                  f"{round(buyers_dict[mint_buyer]['profits'],2)} ETH (${round(buyers_dict[mint_buyer]['profits_usd'],2)})")
+            #print(f"{mint_buyer['name']} sold all of their {nft_name}")
 
 
 
+
+#analyze_cost_basis(CC_CAN_D)
+
+
+#plot_trade_tree(CC_CAN_D)
 #plot_collections_cumulative_volume(['f6ff0ed8-277a-4039-9c53-18d66b4c2dac'])
 
 #grab_new_blocks()
