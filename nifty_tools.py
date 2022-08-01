@@ -137,17 +137,35 @@ def plot_price_history(nft_id, save_file=False):
     floor_df = get_floor_price_history(nft_id)
 
 
+    '''
+    #histo = px.histogram(x=df.createdAt, text_auto=True)
     fig = make_subplots(specs=[[{"secondary_y": True}]])
-
+    fig.add_histogram(x=df.createdAt, name='Volume', texttemplate="%{value}", opacity=0.5, textangle=0, yaxis="y3")
     fig.add_scatter(x=df.createdAt, y=df.price, name='Price', secondary_y=False, mode='lines+markers', marker=dict(opacity=0.5))
     fig.add_scatter(x=df.createdAt, y=df.priceUsd, name='Price USD', secondary_y=True, mode='lines+markers', marker=dict(opacity=0.5))
     fig.add_scatter(x=floor_df.snapshotTime, y=floor_df.floor_price, name='Floor Price', secondary_y=False)
     fig.add_scatter(x=floor_df.snapshotTime, y=floor_df.floor_price_usd, name='Floor Price USD', secondary_y=True)
-
     fig.update_layout(title_text=f"{nft_data['name']} Price History - {datetime.datetime.now().strftime('%Y-%m-%d')}")
     fig.update_xaxes(title_text="Date")
     fig.update_yaxes(title_text="Price", secondary_y=False)
     fig.update_yaxes(title_text="Price USD", secondary_y=True)
+    '''
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df.createdAt, y=df.price, name='Price (ETH)', mode='lines+markers',
+                    marker=dict(opacity=0.5)))
+    fig.add_trace(go.Scatter(x=df.createdAt, y=df.priceUsd, name='Price (USD)', mode='lines+markers',
+                    marker=dict(opacity=0.5), yaxis="y2"))
+    fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price, name='Floor Price', ))
+    fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price_usd, name='Floor Price USD', yaxis="y2"))
+    fig.add_trace(go.Histogram(x=df.createdAt, name='Volume', texttemplate="%{value}", opacity=0.4, textangle=0, yaxis="y3"))
+    fig.update_layout(xaxis=dict(domain=[0, 0.95]), yaxis=dict(title="Price", side="right", position=0.95),
+                      yaxis2=dict(title="Price USD", overlaying="y", side="right", position=1),
+                      yaxis3=dict(title="Volume", overlaying="y"),
+                      font=dict(size=14),
+                      title_text=f"{nft_data['name']} Price History - {datetime.datetime.now().strftime('%Y-%m-%d')}",
+                      template="plotly_dark")
+
     fig.show()
 
     if save_file:
@@ -156,7 +174,7 @@ def plot_price_history(nft_id, save_file=False):
             os.makedirs(f"price_history_charts\\{datetime.datetime.now().strftime('%Y-%m-%d')}")
         filename = "".join(x for x in nft_data['name'] if (x.isalnum() or x in "._- ")) + '.png'
 
-        fig.write_image(f"{folder}\\{filename}",width=2000, height=1200)
+        fig.write_image(f"{folder}\\{filename}",width=1600, height=1000)
 
 def plot_collection_price_history(collection_id):
     nf = nifty.NiftyDB()
@@ -315,7 +333,7 @@ def plot_user_transaction_history(user_id):
     fig.show()
 
 
-def plot_collections_cumulative_volume(collectionId_list):
+def plot_collections_cumulative_volume(collectionId_list, start_date=None):
     nf = nifty.NiftyDB()
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     for collection in collectionId_list:
@@ -328,9 +346,13 @@ def plot_collections_cumulative_volume(collectionId_list):
         df['volume'] = df['amount'] * df['price']
         df['volume_usd'] = df['amount'] * df['priceUsd']
 
+        if start_date:
+            start = pd.to_datetime(start_date)
+            df = df[df.createdAt >= start]
+
         fig.add_scatter(x=df.createdAt, y=df.volume.cumsum(), name="Cyber Crew Volume (ETH)", secondary_y=False)
         fig.add_scatter(x=df.createdAt, y=df.volume_usd.cumsum(), name="Cyber Crew Volume (USD)", mode='lines', secondary_y=True)
-
+        fig.add_histogram(x=df.createdAt)
         #fig = px.line(x=df.createdAt, y=df.volume.cumsum(), title="Cyber Crew Volume (ETH)")
 
         fig.update_layout(title_text=f"Cyber Crew Cumulative Volume - {datetime.datetime.now().strftime('%Y-%m-%d')}")
@@ -373,17 +395,72 @@ def get_floor_price_history(nftId):
 
     return floor_df
 
-def get_latest_orderbook_data(nftId):
+def get_latest_orderbook_data(nftId, use_live_data=False):
+    if use_live_data:
+        grab_and_save_orders([nftId])
+
     nf = nifty.NiftyDB()
     snapshotTimes, orderbook = nf.get_orderbook_data(nftId)
     df = pd.DataFrame(orderbook, columns=['username', 'address', 'amount', 'price', 'orderId', 'fullfilledAmount',
                                           'nft_name', 'nftId', 'snapshotTime'])
     df.set_index('snapshotTime')
     df = df[df['snapshotTime'] == snapshotTimes[-1]['snapshotTime']]
-    #df['snapshotTime'] = pd.to_datetime(df['snapshotTime'], unit='s', utc=False)
 
-    print(df)
     return df
+
+def analyze_latest_orderbook(nftId, next_goal, use_live_data=False):
+    data = get_latest_orderbook_data(nftId, use_live_data=use_live_data)
+    data = data.loc[data['nftId'] == nftId]
+    floor_price = data['price'].min()
+
+    grouped = data.groupby('username').sum()
+
+    sellers_list = []
+    for _, user in grouped.iterrows():
+        seller = dict()
+        seller['username'] = user.name
+        seller['total_amount'] = int(user.amount)
+        sale_list = []
+        sellers_orders = data[data['username'] == user.name]
+        for _, order in sellers_orders.iterrows():
+            sale = dict()
+            sale['amount'] = int(order.amount)
+            sale['price'] = order.price
+            sale_list.append(sale)
+        seller['orders'] = sale_list
+        sellers_list.append(seller)
+
+    sellers_list = sorted(sellers_list, key=lambda d: d['username'])
+    total_for_sale = 0
+    floor_plus_20 = 0
+    floor_plus_50 = 0
+    til_next_goal = 0
+    for seller in sellers_list:
+
+        info_str = f"{seller['username']} has {seller['total_amount']}x for sale. Orders: "
+        total_for_sale += seller['total_amount']
+        for index, order in enumerate(seller['orders']):
+            info_str += f"{order['amount']}x @ {order['price']} ETH, "
+            if index == len(seller['orders']) - 1:
+                info_str = info_str[:-2]
+            if order['price'] <= floor_price*1.2:
+                floor_plus_20 += order['amount']
+            if order['price'] <= floor_price*1.5:
+                floor_plus_50 += order['amount']
+            if order['price'] < next_goal:
+                til_next_goal += order['amount']
+        #print(info_str)
+
+
+    print(f"{data['nft_name'].iloc[0]}")
+    print("---------------------------------------")
+    print(f"Total for sale: {total_for_sale}")
+    print(f"Floor price: {floor_price} ETH")
+    print(f"Number up to floor + 20% ({round(floor_price*1.2,2)} ETH): {floor_plus_20}")
+    print(f"Number up to floor + 50% ({round(floor_price*1.5,2)} ETH): {floor_plus_50}")
+    print(f"Number for sale before {next_goal} ETH: {til_next_goal}")
+
+
 
 
 
