@@ -6,8 +6,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from PIL import Image
-import circlify
-import matplotlib.pyplot as plt
 import kaleido
 import networkx as nx
 import loopring_api as loopring
@@ -690,6 +688,19 @@ def pull_usernames_from_transactions(blockId=None):
             address = lr.get_user_address(user['buyerAccount'])
             new_user = User(address=address)
             print(f"Retrieved username for {user['buyerAccount']}: {new_user.username}")
+
+# Function to be called periodically to check if user has set a username and update DB if so
+def check_for_new_usernames():
+    nf = nifty.NiftyDB()
+    lr = loopring.LoopringAPI()
+    users = nf.get_users_without_usernames()
+    new_usernames_found = 0
+    for user in users:
+        print(f"Checking for username for {user['address']}")
+        new_username = User(address=user['address'], check_new_name=True).username
+        if len(new_username) != 42:
+            new_usernames_found += 1
+    print(f"New username check complete")
 
 
 

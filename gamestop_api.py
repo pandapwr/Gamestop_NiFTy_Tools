@@ -439,7 +439,7 @@ class Nft:
 
 
 class User:
-    def __init__(self, username=None, address=None, get_nfts=False, get_collections=False):
+    def __init__(self, username=None, address=None, get_nfts=False, get_collections=False, check_new_name=False):
         self.headers = API_HEADERS
         self.username = None
         self.address = None
@@ -451,16 +451,18 @@ class User:
         self.lr = loopring.LoopringAPI()
 
         self.db = nifty.NiftyDB()
-        if address is not None:
-            self.accountId, self.address, self.username = self.db.get_user_info(address=address)
-        else:
-            self.accountId, self.address, self.username = self.db.get_user_info(username=username)
+
+        if not check_new_name:
+            if address is not None:
+                self.accountId, self.address, self.username = self.db.get_user_info(address=address)
+            else:
+                self.accountId, self.address, self.username = self.db.get_user_info(username=username)
 
         if self.accountId is None:
             if username is not None:
-                self.get_user_profile(username=username, updateDb=True)
+                self.get_user_profile(username=username, updateDb=True, check_new_name=check_new_name)
             elif address is not None:
-                self.get_user_profile(address=address, updateDb=True)
+                self.get_user_profile(address=address, updateDb=True, check_new_name=check_new_name)
 
         if get_collections:
             self.number_of_collections = self.get_created_collections()
@@ -473,7 +475,7 @@ class User:
 
         return data
 
-    def get_user_profile(self, username=None, address=None, updateDb=False):
+    def get_user_profile(self, username=None, address=None, updateDb=False, check_new_name=False):
 
         if username is not None:
             api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getPublicProfile?displayName={username}"
@@ -490,7 +492,7 @@ class User:
             except requests.exceptions.JSONDecodeError:
                 print("JSONDecodeError, retrying")
                 attempts += 1
-                time.sleep(1)
+                time.sleep(5)
 
         if 'userName' in response and response['userName'] is not None:
             self.username = response['userName']
@@ -498,8 +500,14 @@ class User:
             self.username = response['l1Address']
         self.address = response['l1Address']
         self.accountId = self.lr.get_accountId_from_address(self.address)
-        if updateDb:
-            self.db.insert_user_info(accountId=self.accountId, address=self.address, username=self.username)
+
+        if check_new_name:
+            if len(self.username) != 42:
+                print(f"Found username for {self.address}: {self.username}, updating database")
+                self.db.update_username(accountId=self.accountId, username=self.username)
+        else:
+            if updateDb:
+                self.db.insert_user_info(accountId=self.accountId, address=self.address, username=self.username)
 
         return
 

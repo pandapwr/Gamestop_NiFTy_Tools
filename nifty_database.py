@@ -235,6 +235,19 @@ class NiftyDB:
         else:
             return result
 
+    def get_users_without_usernames(self):
+        query = f"SELECT *, LENGTH(username) AS user_length FROM users WHERE user_length=42"
+        self.c.execute(query)
+        users = self.c.fetchall()
+        if users is None:
+            return None
+        else:
+            return users
+
+    def update_username(self, accountId, username):
+        query = f"UPDATE users SET username='{username}' WHERE accountId='{accountId}'"
+        self.c.execute(query)
+        self.conn.commit()
 
 
 
