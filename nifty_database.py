@@ -223,6 +223,19 @@ class NiftyDB:
         else:
             return snapshotTimes, result
 
+    def get_all_gamestop_nft_users(self, blockId=None):
+        if blockId is None:
+            query = f"SELECT * from transactions GROUP BY buyerAccount ORDER BY buyerAccount"
+        else:
+            query = f"SELECT * from transactions WHERE blockId>{blockId} GROUP BY buyerAccount ORDER BY buyerAccount"
+        self.c.execute(query)
+        result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
+
+
 
 
         '''

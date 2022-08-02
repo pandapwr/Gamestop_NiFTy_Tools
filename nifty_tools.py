@@ -6,6 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from PIL import Image
+import circlify
 import matplotlib.pyplot as plt
 import kaleido
 import networkx as nx
@@ -76,6 +77,39 @@ def save_nft_holders(nft_id, file_name):
 
     print("Finished! " + str(total_holders) + " holders found.")
 
+def plot_chrome_claw_holders():
+    lr = loopring.LoopringAPI()
+    clone_card = Nft(CC_CLONE_CARD)
+    clone = Nft(CC_CLONE)
+    _, clone_card_holders = lr.get_nft_holders(clone_card.data['nftData'])
+    _, clone_holders = lr.get_nft_holders(clone.data['nftData'])
+    cc_df = pd.DataFrame(clone_card_holders)
+    clone_df = pd.DataFrame(clone_holders)
+    df = pd.concat([cc_df, clone_df])
+    df['amount'] = pd.to_numeric(df['amount'])
+    grouped = df.groupby(['user'])['amount'].sum()
+    grouped = grouped.reset_index()
+    grouped['amount_str'] = grouped['amount'].astype(str)
+    grouped['label'] = grouped[['user', 'amount_str']].agg(' - '.join, axis=1)
+    print(grouped.to_string())
+
+    holders_dict = dict()
+    holders_dict['name'] = 'Chrome Claw Holders'
+    holders_list = []
+    for _, holder in grouped.iterrows():
+        data = dict()
+        if len(holder['user']) > 20:
+            data['name'] = holder['user'][:8]
+        else:
+            data['name'] = holder['user']
+        data['value'] = holder['amount']
+        holders_list.append(data)
+    holders_dict['data'] = holders_list
+    print(holders_dict)
+
+
+
+
 
 def get_historical_crypto_data(currency, start_date):
     print(f"Getting historical data for {currency} starting at {start_date}")
@@ -123,6 +157,10 @@ def grab_new_blocks():
         except KeyError:
             print(f"Block {last_block+i} not found, database is up to date.")
             break
+
+    print("Looking for new users...")
+    pull_usernames_from_transactions(blockId=last_block)
+
 
 # Plot price history using pandas
 def plot_price_history(nft_id, save_file=False, bg_img=None):
@@ -574,12 +612,17 @@ def plot_trade_tree(nftId):
                     )
     fig.show()
 
-def analyze_cost_basis(nftId):
+#
+# Function to grab a list of mint buyers and check if they still hold any copies of the NFT
+#
+def analyze_mint_buyers(nftId):
     nf = nifty.NiftyDB()
     nft_name = Nft(nftId).get_name()
     trade_data = nf.get_nft_trade_history(nftId)
     df = pd.DataFrame(trade_data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
                       'amount', 'price', 'priceUsd', 'seller', 'buyer'])
+    cryptomoon = df[df['buyerAccount'] == 162874]
+    print(cryptomoon.to_string())
     mint_buyers = df[df['sellerAccount'] == 92477]
     buyers_dict = dict()
     for index, buyer in mint_buyers.iterrows():
@@ -602,6 +645,8 @@ def analyze_cost_basis(nftId):
 
     # For each of the mint buyers, add any additional purchases and subtract any sales from their holdings
     for mint_buyer in buyers_dict:
+        if(mint_buyer == 162874):
+            print("Cryptomoon")
         # Add the purchases
         mint_buyer_purchases = df[df['buyerAccount'] == mint_buyer]
         for index, purchase in mint_buyer_purchases.iterrows():
@@ -612,7 +657,8 @@ def analyze_cost_basis(nftId):
             buyers_dict[mint_buyer]['profits_usd'] -= purchase['priceUsd'] * purchase['amount']
             buyers_dict[mint_buyer]['cost_basis'] = buyers_dict[mint_buyer]['amount_paid'] / buyers_dict[mint_buyer]['amount']
             buyers_dict[mint_buyer]['cost_basis_usd'] = buyers_dict[mint_buyer]['amount_paid_usd'] / buyers_dict[mint_buyer]['amount']
-
+        if(mint_buyer == 162874):
+            print(mint_buyer_purchases.to_string())
         # Subtract the sales
         mint_buyer_sales = df[df['sellerAccount'] == mint_buyer]
         for index, sale in mint_buyer_sales.iterrows():
@@ -627,14 +673,27 @@ def analyze_cost_basis(nftId):
             else:
                 buyers_dict[mint_buyer]['cost_basis'] = 0
                 buyers_dict[mint_buyer]['cost_basis_usd'] = 0
-
+        if(mint_buyer == 162874):
+            print(mint_buyer_sales.to_string())
         if buyers_dict[mint_buyer]['amount'] == 0:
-
             print(f"{buyers_dict[mint_buyer]['name']} sold all of their {nft_name} and cashed out with a profit of "
                   f"{round(buyers_dict[mint_buyer]['profits'],2)} ETH (${round(buyers_dict[mint_buyer]['profits_usd'],2)})")
-            #print(f"{mint_buyer['name']} sold all of their {nft_name}")
+
+def pull_usernames_from_transactions(blockId=None):
+    nf = nifty.NiftyDB()
+    lr = loopring.LoopringAPI()
+    user_tx = nf.get_all_gamestop_nft_users(blockId=blockId)
+    for user in user_tx:
+        #Check to see if in database first
+        _, _, username = nf.get_user_info(accountId=user['buyerAccount'])
+        if username is None:
+            address = lr.get_user_address(user['buyerAccount'])
+            new_user = User(address=address)
+            print(f"Retrieved username for {user['buyerAccount']}: {new_user.username}")
 
 
+
+#pull_usernames_from_transactions()
 
 
 #analyze_cost_basis(CC_CAN_D)
