@@ -89,6 +89,7 @@ class NiftyDB:
         end = timestamp + 500
         query = f"SELECT * FROM historical_crypto_prices WHERE currency='{currency}' AND timestamp " \
                 f"BETWEEN {start} AND {end} ORDER BY timestamp DESC"
+        print(f"Retrieving price for {currency} at {timestamp}")
         #print(f"Query: {query}")
         self.c.execute(query)
         result = self.c.fetchone()
@@ -141,14 +142,14 @@ class NiftyDB:
                 "INNER JOIN nfts on transactions.nftData = nfts.nftData " \
                 "INNER JOIN users as buyer on transactions.buyerAccount = buyer.accountId " \
                 "INNER JOIN users as seller on transactions.sellerAccount = seller.accountId " \
-                f"WHERE buyerAccount='{accountId}' OR sellerAccount='{accountId}' " \
+                f"WHERE (buyerAccount='{accountId}' OR sellerAccount='{accountId}') " \
 
         if nftData_List is not None:
             formatted_nftData_List = ', '.join(['"%s"' % w for w in nftData_List])
             query += f" AND transactions.nftData in ({formatted_nftData_List})"
 
-        query += f"ORDER BY transactions.blockId DESC"
-        print(f"Query: {query}")
+        query += f"ORDER BY transactions.blockId"
+
 
         self.c.execute(query)
         result = self.c.fetchall()

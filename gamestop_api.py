@@ -185,7 +185,6 @@ class Nft:
             data['createdAt'] = datetime.strptime(data['createdAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
             data['updatedAt'] = datetime.strptime(data['updatedAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
             data['firstMintedAt'] = datetime.strptime(data['firstMintedAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
-
         return data
 
 
@@ -195,6 +194,7 @@ class Nft:
         db_data = db.get_nft_data(self.nft_id)
 
         if db_data is not None and self.get_all_data is False:
+
             data = dict()
             data['nftId'] = db_data['nftId']
             data['name'] = db_data['name']
@@ -208,35 +208,37 @@ class Nft:
             data['firstMintedAt'] = db_data['firstMintedAt']
             self.on_gs_nft = True
             self.in_db = True
+
             return self._add_datetime(data, from_timestamp=True)
 
-        # If NFT not found in database, query the API
-        print(f"Querying API for NFT {self.nft_id}")
-        if len(self.nft_id) > 100:
-            api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
-                       f"tokenIdAndContractAddress={self.nft_id}")
         else:
-            api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
-                       f"nftId={self.nft_id}")
-        response = requests.get(api_url, headers=self.headers).json()
+            # If NFT not found in database, query the API
+            print(f"Querying API for NFT {self.nft_id}")
+            if len(self.nft_id) > 100:
+                api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
+                           f"tokenIdAndContractAddress={self.nft_id}")
+            else:
+                api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
+                           f"nftId={self.nft_id}")
+            response = requests.get(api_url, headers=self.headers).json()
 
-        if "nftId" in response:
-            # If the NFT is on GameStop, add it to the database
-            self.on_gs_nft = True
-            response = self._add_datetime(response)
-            response['createdAt'] = time.mktime(response['createdAt'].timetuple())
-            response['updatedAt'] = time.mktime(response['updatedAt'].timetuple())
-            response['firstMintedAt'] = time.mktime(response['firstMintedAt'].timetuple())
-            db.insert_nft(response['nftId'], response['loopringNftInfo']['nftData'][0], response['tokenId'],
-                          response['contractAddress'], response['creatorEthAddress'], response['metadataJson']['name'],
-                          response['amount'], response['collectionId'], response['createdAt'],
-                          response['firstMintedAt'], response['updatedAt'])
-            self.in_db = True
-            db.close()
-            return response
-        else:
-            db.close()
-            return None
+            if "nftId" in response:
+                # If the NFT is on GameStop, add it to the database
+                self.on_gs_nft = True
+                response = self._add_datetime(response)
+                response['createdAt'] = time.mktime(response['createdAt'].timetuple())
+                response['updatedAt'] = time.mktime(response['updatedAt'].timetuple())
+                response['firstMintedAt'] = time.mktime(response['firstMintedAt'].timetuple())
+                db.insert_nft(response['nftId'], response['loopringNftInfo']['nftData'][0], response['tokenId'],
+                              response['contractAddress'], response['creatorEthAddress'], response['metadataJson']['name'],
+                              response['amount'], response['collectionId'], response['createdAt'],
+                              response['firstMintedAt'], response['updatedAt'])
+                self.in_db = True
+                db.close()
+                return response
+            else:
+                db.close()
+                return None
 
 
     def get_orders(self):
@@ -403,10 +405,10 @@ class Nft:
         return self.data['metadataJson']['properties']
 
     def get_nft_data(self):
-        if self.get_all_data is False:
-            self.get_all_data = True
-            self.data = self.get_nft_info()
-        return self.data['loopringNftInfo']['nftData'][0]
+        if self.in_db:
+            return self.data['nftData']
+        else:
+            return self.data['loopringNftInfo']['nftData'][0]
 
     def get_minted_datetime(self):
         return self.data['firstMintedAt']
@@ -439,7 +441,7 @@ class Nft:
 
 
 class User:
-    def __init__(self, username=None, address=None, get_nfts=False, get_collections=False, check_new_name=False):
+    def __init__(self, username=None, address=None, accountId=None, get_nfts=False, get_collections=False, check_new_name=False):
         self.headers = API_HEADERS
         self.username = None
         self.address = None
@@ -455,6 +457,8 @@ class User:
         if not check_new_name:
             if address is not None:
                 self.accountId, self.address, self.username = self.db.get_user_info(address=address)
+            elif accountId is not None:
+                self.accountId, self.address, self.username = self.db.get_user_info(accountId=accountId)
             else:
                 self.accountId, self.address, self.username = self.db.get_user_info(username=username)
 

@@ -1,6 +1,7 @@
 import csv
 import datetime
 import os
+import sys
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -8,10 +9,12 @@ from plotly.subplots import make_subplots
 from PIL import Image
 import kaleido
 import networkx as nx
+from concurrent.futures import ThreadPoolExecutor
 import loopring_api as loopring
 from gamestop_api import User, Nft, NftCollection, GamestopApi
 from Historic_Crypto import HistoricalData
 from coinbase_api import CoinbaseAPI
+
 import nifty_database as nifty
 
 
@@ -111,6 +114,7 @@ def plot_chrome_claw_holders():
 
 def get_historical_crypto_data(currency, start_date):
     print(f"Getting historical data for {currency} starting at {start_date}")
+
     return CoinbaseAPI(f'{currency}-USD', start_date).retrieve_data()
 
 
@@ -390,7 +394,7 @@ def plot_user_transaction_history(user_id):
     fig.show()
 
 
-def plot_collections_cumulative_volume(collectionId_list, start_date=None):
+def plot_collections_cumulative_volume(collectionId_list, start_date=None, save_file=False):
     nf = nifty.NiftyDB()
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     for collection in collectionId_list:
@@ -409,14 +413,23 @@ def plot_collections_cumulative_volume(collectionId_list, start_date=None):
 
         fig.add_scatter(x=df.createdAt, y=df.volume.cumsum(), name="Cyber Crew Volume (ETH)", secondary_y=False)
         fig.add_scatter(x=df.createdAt, y=df.volume_usd.cumsum(), name="Cyber Crew Volume (USD)", mode='lines', secondary_y=True)
-        fig.add_histogram(x=df.createdAt)
+        fig.add_histogram(x=df.createdAt, opacity=0.4, name="# Trades")
         #fig = px.line(x=df.createdAt, y=df.volume.cumsum(), title="Cyber Crew Volume (ETH)")
 
-        fig.update_layout(title_text=f"Cyber Crew Cumulative Volume - {datetime.datetime.now().strftime('%Y-%m-%d')}")
+        fig.update_layout(title_text=f"Cyber Crew Cumulative Volume - {datetime.datetime.now().strftime('%Y-%m-%d')}",
+                          template="plotly_dark")
         fig.update_xaxes(title_text="Date")
         fig.update_yaxes(title_text="Volume (ETH)", secondary_y=False)
         fig.update_yaxes(title_text="Volume (USD)", secondary_y=True)
     fig.show()
+
+    if save_file:
+        folder = f"cumulative_volume_charts\\{datetime.datetime.now().strftime('%Y-%m-%d')}"
+        if not os.path.exists(f"cumulative_volume_charts\\{datetime.datetime.now().strftime('%Y-%m-%d')}"):
+            os.makedirs(f"cumulative_volume_charts\\{datetime.datetime.now().strftime('%Y-%m-%d')}")
+        filename = datetime.datetime.now().strftime('%Y-%m-%d') + ' - Cyber Crew Cumulative Volume.png'
+
+        fig.write_image(f"{folder}\\{filename}",width=1600, height=1000)
 
 def grab_and_save_orders(nftId_list):
     nf = nifty.NiftyDB()
@@ -619,8 +632,6 @@ def analyze_mint_buyers(nftId):
     trade_data = nf.get_nft_trade_history(nftId)
     df = pd.DataFrame(trade_data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
                       'amount', 'price', 'priceUsd', 'seller', 'buyer'])
-    cryptomoon = df[df['buyerAccount'] == 162874]
-    print(cryptomoon.to_string())
     mint_buyers = df[df['sellerAccount'] == 92477]
     buyers_dict = dict()
     for index, buyer in mint_buyers.iterrows():
@@ -643,8 +654,6 @@ def analyze_mint_buyers(nftId):
 
     # For each of the mint buyers, add any additional purchases and subtract any sales from their holdings
     for mint_buyer in buyers_dict:
-        if(mint_buyer == 162874):
-            print("Cryptomoon")
         # Add the purchases
         mint_buyer_purchases = df[df['buyerAccount'] == mint_buyer]
         for index, purchase in mint_buyer_purchases.iterrows():
@@ -655,8 +664,6 @@ def analyze_mint_buyers(nftId):
             buyers_dict[mint_buyer]['profits_usd'] -= purchase['priceUsd'] * purchase['amount']
             buyers_dict[mint_buyer]['cost_basis'] = buyers_dict[mint_buyer]['amount_paid'] / buyers_dict[mint_buyer]['amount']
             buyers_dict[mint_buyer]['cost_basis_usd'] = buyers_dict[mint_buyer]['amount_paid_usd'] / buyers_dict[mint_buyer]['amount']
-        if(mint_buyer == 162874):
-            print(mint_buyer_purchases.to_string())
         # Subtract the sales
         mint_buyer_sales = df[df['sellerAccount'] == mint_buyer]
         for index, sale in mint_buyer_sales.iterrows():
@@ -671,11 +678,14 @@ def analyze_mint_buyers(nftId):
             else:
                 buyers_dict[mint_buyer]['cost_basis'] = 0
                 buyers_dict[mint_buyer]['cost_basis_usd'] = 0
-        if(mint_buyer == 162874):
-            print(mint_buyer_sales.to_string())
-        if buyers_dict[mint_buyer]['amount'] == 0:
+        amount_remaining = buyers_dict[mint_buyer]['amount']
+        if amount_remaining == 0:
             print(f"{buyers_dict[mint_buyer]['name']} sold all of their {nft_name} and cashed out with a profit of "
                   f"{round(buyers_dict[mint_buyer]['profits'],2)} ETH (${round(buyers_dict[mint_buyer]['profits_usd'],2)})")
+        elif amount_remaining < 0:
+            print(f"{buyers_dict[mint_buyer]['name']} calculated to have less than 0 remaining, incomplete transaction data?")
+
+
 
 def pull_usernames_from_transactions(blockId=None):
     nf = nifty.NiftyDB()
@@ -702,7 +712,64 @@ def check_for_new_usernames():
             new_usernames_found += 1
     print(f"New username check complete")
 
+def get_user_average_hold_time(nftId, accountId=None, username=None, address=None):
+    if accountId is not None:
+        user = User(accountId=accountId)
+    elif username is not None:
+        user = User(username=username)
+    elif address is not None:
+        user = User(address=address)
+    else:
+        return None
 
+    nft = Nft(nftId)
+    nf = nifty.NiftyDB()
+
+    trade_history = nf.get_user_trade_history(user.accountId, nftData_List=[nft.get_nft_data()])
+    df = pd.DataFrame(trade_history, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount',
+                                              'buyerAccount', 'amount', 'price', 'priceUsd', 'nftData2', 'name',
+                                              'buyer', 'seller'])
+    df.createdAt = pd.to_datetime(df.createdAt, unit='s', utc=True)
+    df.set_index('createdAt')
+    end_time = pd.Timestamp.utcnow()
+    total_hold_time = 0
+    running_total_amount = 0
+    for idx, tx in df.iterrows():
+
+        if tx.buyerAccount == user.accountId:
+            running_total_amount += tx.amount
+            total_hold_time += tx.amount * (end_time - tx.createdAt).total_seconds()
+
+        if tx.sellerAccount == user.accountId:
+            running_total_amount -= tx.amount
+            total_hold_time -= tx.amount * (end_time - tx.createdAt).total_seconds()
+    if round(total_hold_time/running_total_amount/86400, 2) < 0:
+        print(f"{user.username} has a negative average hold time of {round(total_hold_time/running_total_amount/86400, 2)} days")
+
+
+    return {'user': user.username, 'accountId': user.accountId, 'amount': running_total_amount,
+            'hold_time': round(total_hold_time/running_total_amount/86400, 2)}
+
+def calculate_nft_average_hold_time(nftId):
+    nft = Nft(nftId)
+    lr = loopring.LoopringAPI()
+    num_holders, holders = lr.get_nft_holders(nft.get_nft_data())
+
+    holder_hold_times = []
+    with ThreadPoolExecutor(max_workers=30) as executor:
+        futures = [executor.submit(get_user_average_hold_time, nftId, holder['accountId']) for holder in holders]
+        for future in futures:
+            holder_hold_times.append(future.result())
+
+    total_hold_time = 0
+    for entry in holder_hold_times:
+        total_hold_time += entry['hold_time']
+    average_hold_time = total_hold_time / num_holders
+
+    return average_hold_time
+
+#print(get_user_average_hold_time(CC_CLONE_CARD, 'SteamyLeaks'))
+#calculate_nft_average_hold_time(CC_CLONE_CARD)
 
 #pull_usernames_from_transactions()
 
@@ -711,7 +778,7 @@ def check_for_new_usernames():
 
 
 #plot_trade_tree(CC_CAN_D)
-#plot_collections_cumulative_volume(['f6ff0ed8-277a-4039-9c53-18d66b4c2dac'])
+#plot_collections_cumulative_volume(['f6ff0ed8-277a-4039-9c53-18d66b4c2dac'], save_file=True)
 
 #grab_new_blocks()
 
