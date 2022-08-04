@@ -1,6 +1,5 @@
 import sqlite3
 import pandas as pd
-import gamestop_api
 
 db_path = "niftyDB.db"
 
@@ -52,8 +51,8 @@ class NiftyDB:
         slug = self.get_collection_slug(collectionId)
         trait_table = f"traits_{slug}"
 
-    def insert_hold_time(self, nftId, timestamp, hold_time):
-        self.c.execute("INSERT INTO nft_hold_times VALUES (?, ?, ?)", (nftId, timestamp, hold_time))
+    def insert_nft_stats(self, nftId, timestamp, hold_time, num_holders):
+        self.c.execute("INSERT INTO nft_stats VALUES (?, ?, ?, ?)", (nftId, timestamp, hold_time, num_holders))
         self.conn.commit()
 
     def insert_transaction(self, blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd):
@@ -69,8 +68,14 @@ class NiftyDB:
         self.c.execute(query)
         self.conn.commit()
 
+    def insert_discord_server_stats(self, serverId, serverName, timestamp, num_members, num_online):
+        query = (f"INSERT INTO discord_stats VALUES ('{serverId}', '{serverName}', '{timestamp}', '{num_members}', "
+                 f"'{num_online}')")
+        self.c.execute(query)
+        self.conn.commit()
+
     def get_last_hold_time_entry(self, nftId):
-        self.c.execute("SELECT * FROM nft_hold_times WHERE nftId=? ORDER BY timestamp DESC LIMIT 1", (nftId,))
+        self.c.execute("SELECT * FROM nft_stats WHERE nftId=? ORDER BY timestamp DESC LIMIT 1", (nftId,))
         result = self.c.fetchone()
         if result is None:
             return None
@@ -78,7 +83,7 @@ class NiftyDB:
             return result['timestamp']
 
     def get_first_sale(self, nftData):
-        self.c.execute("SELECT * FROM transactions WHERE nftData=? AND txType='SpotTrade' ORDER BY createdAt ASC LIMIT 1", (nftData,))
+        self.c.execute("SELECT * FROM transactions WHERE nftData=? AND txType='SpotTrade' ORDER BY createdAt LIMIT 1", (nftData,))
         result = self.c.fetchone()
         if result is None:
             return None
@@ -100,6 +105,14 @@ class NiftyDB:
             return False
         else:
             return True
+
+    def get_holder_stats(self, nftId):
+        self.c.execute(f"SELECT * FROM nft_stats WHERE nftId='{nftId}' ORDER BY timestamp")
+        result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
 
     def get_latest_saved_block(self):
         self.c.execute("SELECT * FROM transactions ORDER BY blockId DESC LIMIT 1")

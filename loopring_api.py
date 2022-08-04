@@ -9,8 +9,8 @@ import yaml
 
 class LoopringAPI:
     def __init__(self):
-        with open('config.yml', 'r') as file:
-            self.config = yaml.safe_load(file)['loopring']
+        with open('config.yml', 'r') as config:
+            self.config = yaml.safe_load(config)['loopring']
 
         self.lr = requests.session()
         self.lr.headers.update({
@@ -63,7 +63,7 @@ class LoopringAPI:
                     print(f"{index+1}/{total_holders}: {future.result()['user']} owns {future.result()['amount']}")
                     index += 1
                     holders_list.append({'user': future.result()['user'], 'accountId': future.result()['accountId'],
-                                         'amount': future.result()['amount']})
+                                         'amount': future.result()['amount'], 'address': future.result()['address']})
 
         return total_holders, holders_list
 
