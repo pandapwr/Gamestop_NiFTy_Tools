@@ -52,17 +52,18 @@ class LoopringAPI:
                     db = nifty.NiftyDB()
                     _, address, username = db.get_user_info(accountId=accountId)
                     if username is not None:
-                        return {'address': address, 'user': username, 'amount': amount}
+                        return {'address': address, 'user': username, 'accountId': accountId, 'amount': amount}
                     else:
                         address = self.get_user_address(accountId)
                         username = gamestop_api.User(address=address).username
-                        return {'address': address, 'user': username, 'amount': amount}
+                        return {'address': address, 'user': username, 'accountId': accountId, 'amount': amount}
 
                 futures = [executor.submit(check_db_for_user_info, holder['accountId'], holder['amount']) for holder in holders]
                 for future in as_completed(futures):
                     print(f"{index+1}/{total_holders}: {future.result()['user']} owns {future.result()['amount']}")
                     index += 1
-                    holders_list.append({'user': future.result()['user'], 'amount':future.result()['amount']})
+                    holders_list.append({'user': future.result()['user'], 'accountId': future.result()['accountId'],
+                                         'amount': future.result()['amount']})
 
         return total_holders, holders_list
 
