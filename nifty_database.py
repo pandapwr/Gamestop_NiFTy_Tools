@@ -40,11 +40,20 @@ class NiftyDB:
         self.c.execute("INSERT INTO users VALUES (?, ?, ?)", (accountId, address, username))
         self.conn.commit()
 
-    def insert_nft(self, nftId, nftData, tokenId, contractAddress, creatorEthAddress, name, amount, collectionId, createdAt,
-                   firstMintedAt, updatedAt):
-        self.c.execute("INSERT INTO nfts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                       (nftId, nftData, tokenId, contractAddress, creatorEthAddress, name, amount, collectionId, createdAt,
-                        firstMintedAt, updatedAt))
+    def insert_nft(self, nftId, nftData, tokenId, contractAddress, creatorEthAddress, name, amount, attributes,
+                   collectionId, createdAt, firstMintedAt, updatedAt):
+        self.c.execute("INSERT INTO nfts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                       (nftId, nftData, tokenId, contractAddress, creatorEthAddress, name, amount, attributes,
+                        collectionId, createdAt, firstMintedAt, updatedAt))
+        self.conn.commit()
+
+    def insert_traits(self, nftId, collectionId, traits):
+        # Get the slug of the collection first
+        slug = self.get_collection_slug(collectionId)
+        trait_table = f"traits_{slug}"
+
+    def insert_hold_time(self, nftId, timestamp, hold_time):
+        self.c.execute("INSERT INTO nft_hold_times VALUES (?, ?, ?)", (nftId, timestamp, hold_time))
         self.conn.commit()
 
     def insert_transaction(self, blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd):
@@ -59,6 +68,30 @@ class NiftyDB:
                  f"'{ownerAddress}', {amount}, {fulfilledAmount}, {price}, {createdAt}, {snapshotTime})")
         self.c.execute(query)
         self.conn.commit()
+
+    def get_last_hold_time_entry(self, nftId):
+        self.c.execute("SELECT * FROM nft_hold_times WHERE nftId=? ORDER BY timestamp DESC LIMIT 1", (nftId,))
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result['timestamp']
+
+    def get_first_sale(self, nftData):
+        self.c.execute("SELECT * FROM transactions WHERE nftData=? AND txType='SpotTrade' ORDER BY createdAt ASC LIMIT 1", (nftData,))
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result['createdAt']
+
+    def get_collection_slug(self, collectionId):
+        self.c.execute("SELECT * FROM collections WHERE collectionId=?", (collectionId,))
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result['slug']
 
     def check_if_block_exists(self, blockId):
         self.c.execute("SELECT * FROM transactions WHERE blockId=?", (blockId,))
@@ -111,9 +144,9 @@ class NiftyDB:
             print(f"Inserted {timestamp} {datetime} | {currency}-USD: ${price}")
         self.conn.commit()
 
-    def get_nft_transactions(self, nftId):
+    def get_nft_transactions(self, nftData):
 
-        self.c.execute("SELECT * FROM transactions WHERE nftData=?", (nftId,))
+        self.c.execute(f"SELECT * FROM transactions WHERE nftData='{nftData}' ORDER BY blockId")
         result = self.c.fetchall()
         if result is None:
             return None

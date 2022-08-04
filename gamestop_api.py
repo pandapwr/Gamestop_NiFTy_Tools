@@ -1,4 +1,5 @@
 import requests
+import json
 from datetime import datetime
 import loopring_api as loopring
 from concurrent.futures import ThreadPoolExecutor
@@ -159,7 +160,7 @@ class Nft:
         self.get_all_data = get_all_data
         self.lowest_price = 0
         self.on_gs_nft = False
-        self.in_db = False
+        self.from_db = False
 
         self.data = self.get_nft_info()
 
@@ -202,12 +203,13 @@ class Nft:
             data['tokenId'] = db_data['tokenId']
             data['contractAddress'] = db_data['contractAddress']
             data['creatorEthAddress'] = db_data['creatorEthAddress']
+            data['attributes'] = json.loads(db_data['attributes'])
             data['collectionId'] = db_data['collectionId']
             data['createdAt'] = db_data['createdAt']
             data['updatedAt'] = db_data['updatedAt']
             data['firstMintedAt'] = db_data['firstMintedAt']
             self.on_gs_nft = True
-            self.in_db = True
+            self.from_db = True
 
             return self._add_datetime(data, from_timestamp=True)
 
@@ -231,14 +233,13 @@ class Nft:
                 response['firstMintedAt'] = time.mktime(response['firstMintedAt'].timetuple())
                 db.insert_nft(response['nftId'], response['loopringNftInfo']['nftData'][0], response['tokenId'],
                               response['contractAddress'], response['creatorEthAddress'], response['metadataJson']['name'],
-                              response['amount'], response['collectionId'], response['createdAt'],
-                              response['firstMintedAt'], response['updatedAt'])
-                self.in_db = True
+                              response['amount'], json.dumps(response['metadataJson']['properties']), response['collectionId'],
+                              response['createdAt'], response['firstMintedAt'], response['updatedAt'])
                 db.close()
                 return response
             else:
                 db.close()
-                return None
+                raise Exception(f"NFT {self.nft_id} not found on GameStop")
 
 
     def get_orders(self):
@@ -390,7 +391,7 @@ class Nft:
         return self.data['metadataJson']['royalty_percentage']
 
     def get_name(self):
-        if self.get_all_data is False and self.in_db is True:
+        if self.get_all_data is False and self.from_db is True:
             return self.data['name']
         else:
             return self.data['metadataJson']['name']
@@ -399,13 +400,15 @@ class Nft:
         return int(self.data['amount'])
 
     def get_traits(self):
-        if self.get_all_data is False:
-            self.get_all_data = True
-            self.data = self.get_nft_info()
-        return self.data['metadataJson']['properties']
+        if self.from_db:
+            return self.data['attributes']
+        else:
+            return self.data['metadataJson']['properties']
+
+
 
     def get_nft_data(self):
-        if self.in_db:
+        if self.from_db:
             return self.data['nftData']
         else:
             return self.data['loopringNftInfo']['nftData'][0]
