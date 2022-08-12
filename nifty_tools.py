@@ -215,7 +215,7 @@ def print_trade_history(nft_id):
             f"(${row['priceUsd']})")
 
 
-def grab_new_blocks(find_missing=False):
+def grab_new_blocks(find_missing=False, find_new_users=True):
     update_historical_crypto_data('ETH')
     lr = loopring.LoopringAPI()
     nf = nifty.NiftyDB()
@@ -240,9 +240,9 @@ def grab_new_blocks(find_missing=False):
         except KeyError:
             print(f"Block {last_block + i} not found, database is up to date.")
             break
-
-    print("Looking for new users...")
-    pull_usernames_from_transactions(blockId=last_block)
+    if find_new_users:
+        print("Looking for new users...")
+        pull_usernames_from_transactions(blockId=last_block)
 
 
 # Plot price history using pandas
@@ -1206,4 +1206,3 @@ def print_users_holdings_report(accountId_list, output_filename=None):
 
 #lr = loopring.LoopringAPI()
 #print(lr.filter_nft_txs(24419))
-
