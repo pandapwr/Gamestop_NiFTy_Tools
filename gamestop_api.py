@@ -204,6 +204,7 @@ class Nft:
             data['contractAddress'] = db_data['contractAddress']
             data['creatorEthAddress'] = db_data['creatorEthAddress']
             data['attributes'] = json.loads(db_data['attributes'])
+            data['amount'] = db_data['amount']
             data['collectionId'] = db_data['collectionId']
             data['createdAt'] = db_data['createdAt']
             data['updatedAt'] = db_data['updatedAt']
@@ -222,7 +223,10 @@ class Nft:
             else:
                 api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
                            f"nftId={self.nft_id}")
-            response = requests.get(api_url, headers=self.headers).json()
+            try:
+                response = requests.get(api_url, headers=self.headers).json()
+            except requests.exceptions.JSONDecodeError:
+                return None
 
             if "nftId" in response:
                 # If the NFT is on GameStop, add it to the database
@@ -239,7 +243,7 @@ class Nft:
                 return response
             else:
                 db.close()
-                raise Exception(f"NFT {self.nft_id} not found on GameStop")
+                return None
 
 
     def get_orders(self):
@@ -564,11 +568,11 @@ class User:
             if nft_data.on_gs_nft:
                 nft_row = {
                     'name': nft_data.get_name(),
-                    'number_owned': nft_entry['amount'],
+                    'number_owned': int(nft_entry['amount']),
                     'total_number': nft_data.get_total_number(),
                     'nftId': nft_data.get_nftId(),
-                    'url': nft_data.get_url(),
-                    'thumbnail': f"https://www.gstop-content.com/ipfs/{nft_data.data['mediaThumbnailUri'][7:]}",
+                    #'url': nft_data.get_url(),
+                    #'thumbnail': f"https://www.gstop-content.com/ipfs/{nft_data.data['mediaThumbnailUri'][7:]}",
                 }
                 if 'nftId' in nft_row.keys():
                     return nft_row
