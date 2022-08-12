@@ -1,6 +1,5 @@
 import sqlite3
 import pandas as pd
-import gamestop_api
 
 db_path = "niftyDB.db"
 
@@ -52,8 +51,15 @@ class NiftyDB:
         slug = self.get_collection_slug(collectionId)
         trait_table = f"traits_{slug}"
 
-    def insert_hold_time(self, nftId, timestamp, hold_time):
-        self.c.execute("INSERT INTO nft_hold_times VALUES (?, ?, ?)", (nftId, timestamp, hold_time))
+    def insert_nft_stats(self, nftId, timestamp, hold_time, num_holders, whale_amount, top3, top5, avg_amount, median_amount):
+        self.c.execute("INSERT INTO nft_stats VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (nftId, timestamp, hold_time, num_holders,
+                                                                              whale_amount, top3, top5, avg_amount, median_amount))
+        self.conn.commit()
+
+    def update_nft_stats(self, nftId, timestamp, whale_amount, top3, top5, avg_amount, median_amount):
+        query = f"UPDATE nft_stats SET median_amount='{median_amount}', whale_amount='{whale_amount}', top3='{top3}', " \
+                f"top5='{top5}', avg_amount='{avg_amount}' WHERE nftId='{nftId}' AND timestamp='{timestamp}'"
+        self.c.execute(query)
         self.conn.commit()
 
     def insert_transaction(self, blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd):
@@ -62,15 +68,29 @@ class NiftyDB:
                        (blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd))
         self.conn.commit()
 
-    def insert_cc_order(self, orderId, nftId, collectionId, nftData, ownerAddress, amount, fulfilledAmount, price, createdAt, snapshotTime):
+    def insert_order(self, collection, orderId, nftId, collectionId, nftData, ownerAddress, amount, fulfilledAmount, price, createdAt, snapshotTime):
         print("Inserting: ", orderId, nftId, collectionId, nftData, ownerAddress, amount, fulfilledAmount, price, createdAt, snapshotTime)
-        query = (f"INSERT INTO cybercrew_orders VALUES ('{orderId}', '{nftId}', '{collectionId}', '{nftData}', "
-                 f"'{ownerAddress}', {amount}, {fulfilledAmount}, {price}, {createdAt}, {snapshotTime})")
+        query = (f"INSERT INTO {collection + '_orders'} VALUES ('{orderId}', '{nftId}', '{collectionId}', '{nftData}', "
+                 f"'{ownerAddress}', '{amount}', '{fulfilledAmount}', '{price}', '{createdAt}', '{snapshotTime}')")
         self.c.execute(query)
         self.conn.commit()
 
+    def insert_discord_server_stats(self, serverId, serverName, timestamp, num_members, num_online):
+        query = (f"INSERT INTO discord_stats VALUES ('{serverId}', '{serverName}', '{timestamp}', '{num_members}', "
+                 f"'{num_online}')")
+        self.c.execute(query)
+        self.conn.commit()
+
+    def get_discord_server_stats(self, serverId):
+        self.c.execute("SELECT * FROM discord_stats WHERE serverId=?", (serverId,))
+        result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
+
     def get_last_hold_time_entry(self, nftId):
-        self.c.execute("SELECT * FROM nft_hold_times WHERE nftId=? ORDER BY timestamp DESC LIMIT 1", (nftId,))
+        self.c.execute("SELECT * FROM nft_stats WHERE nftId=? ORDER BY timestamp DESC LIMIT 1", (nftId,))
         result = self.c.fetchone()
         if result is None:
             return None
@@ -78,7 +98,7 @@ class NiftyDB:
             return result['timestamp']
 
     def get_first_sale(self, nftData):
-        self.c.execute("SELECT * FROM transactions WHERE nftData=? AND txType='SpotTrade' ORDER BY createdAt ASC LIMIT 1", (nftData,))
+        self.c.execute("SELECT * FROM transactions WHERE nftData=? AND txType='SpotTrade' ORDER BY createdAt LIMIT 1", (nftData,))
         result = self.c.fetchone()
         if result is None:
             return None
@@ -100,6 +120,14 @@ class NiftyDB:
             return False
         else:
             return True
+
+    def get_holder_stats(self, nftId):
+        self.c.execute(f"SELECT * FROM nft_stats WHERE nftId='{nftId}' ORDER BY timestamp")
+        result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
 
     def get_latest_saved_block(self):
         self.c.execute("SELECT * FROM transactions ORDER BY blockId DESC LIMIT 1")
@@ -238,17 +266,17 @@ class NiftyDB:
         else:
             return result
 
-    def get_orderbook_data(self, nftId):
+    def get_orderbook_data(self, nftId, collection):
         # First, get the available snapshot times
-        query = f"SELECT cc.nftId, cc.snapshotTime from cybercrew_orders AS cc GROUP BY snapshotTime ORDER BY snapshotTime"
+        query = f"SELECT orders.nftId, orders.snapshotTime from {collection + '_orders'} AS orders GROUP BY snapshotTime ORDER BY snapshotTime"
         self.c.execute(query)
         snapshotTimes = self.c.fetchall()
 
         # Then, get the orderbook data
-        query = "SELECT users.username, cc.ownerAddress, cc.amount, cc.price, cc.orderId, cc.fulfilledAmount," \
-                " nfts.name, cc.nftId, cc.snapshotTime from cybercrew_orders AS cc " \
-                "INNER JOIN users ON cc.ownerAddress = users.address " \
-                "INNER JOIN nfts ON nfts.nftId = cc.nftId " \
+        query = "SELECT users.username, orders.ownerAddress, orders.amount, orders.price, orders.orderId, orders.fulfilledAmount," \
+                f" nfts.name, orders.nftId, orders.snapshotTime from {collection + '_orders'} AS orders " \
+                "INNER JOIN users ON orders.ownerAddress = users.address " \
+                "INNER JOIN nfts ON nfts.nftId = orders.nftId " \
                 "ORDER BY snapshotTime"
         self.c.execute(query)
         result = self.c.fetchall()

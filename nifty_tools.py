@@ -1,24 +1,22 @@
 import csv
 from datetime import datetime
 import os
-import sys
+import statistics
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
+import numpy as np
 from plotly.subplots import make_subplots
 from PIL import Image
-import kaleido
 import networkx as nx
 from concurrent.futures import ThreadPoolExecutor
+from xlsxwriter import Workbook
 import loopring_api as loopring
+import discord_api as discord
 from gamestop_api import User, Nft, NftCollection, GamestopApi
-from Historic_Crypto import HistoricalData
 from coinbase_api import CoinbaseAPI
 
 import nifty_database as nifty
 
-
-NFT_HOLDERS_FOLDER = "NFT_Holders"
 
 CC_CHROME_CANNON = "01eb2193-81d8-4546-9a40-da3f317341c7"
 CC_CLONE_CARD = "7bebfd17-005e-4fca-b9bb-08dacba8677e"
@@ -29,18 +27,27 @@ CC_CYBER_CYCLE = "91994321-dcaf-44e6-88df-2f6dad3df801"
 CC_LOADING_LEVEL = "bb2199e0-c614-460c-ba95-54593eb8caff"
 CC_CLONE_CENTER = "15a15703-a3ed-4768-8d7a-5931025294ed"
 CC_CLONEBOT_STICKER = "b67b2a29-5931-4610-a157-607877340ea2"
+
+CC_RED_CUPCAKE = "0x1d608bd077b05370d534e76d694b256c52ae8e53b36f2aa6110945a52243b011"
+CC_MILK = "0x07bf8d4ec2aeb66b3df9535e0c5cff1510e07440dfbb5228e7b3ef07fbf8a37b"
+CC_BLUE_CUPCAKE = "0x0184bd12f853f67f20ff2a555af2f1a5a24536985f8077b4e27822bc827eb3cf"
+CC_FACTORY = "0x22385936e403173cc0a2a62b1e96caa296930432c893a961db1f2621733fd651"
+CC_ORANGE_CUPCAKE = "0x0f8ee4599868e30ca01db1dbe4c168620a2745c6f3cecb056dc38f47c59233fb"
+
 MB_ASTROBOY = "47400769-a0e8-4763-8f42-82e3566ff512"
 
-CC_NFTID_LIST = [CC_10_WORLDS, CC_CHROME_CANNON, CC_CLONE_CARD, CC_CAN_D, CC_CLONE, CC_CYBER_CYCLE, CC_LOADING_LEVEL, CC_CLONE_CENTER]
+
+CC_NFTID_LIST = [CC_10_WORLDS, CC_CHROME_CANNON, CC_CLONE_CARD, CC_CAN_D, CC_CLONE, CC_CYBER_CYCLE, CC_LOADING_LEVEL,
+                 CC_CLONE_CENTER]
 
 CC_NFTDATA = ["0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01",
-                  "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724",
-                  "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca",
-                  "0x2c4b4edd628bcffffbf4a9d434ce83e4737889b65eee922f00d3c2b2d82b3394",
-                  "0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf",
-                  "0x0d1a4f4d19f4aaaaf01cfc1eee2c24294653ab376fb0daf319ae6fdb2063c4a3",
-                  "0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3",
-                  "0x19562143481eeeea9051659e5a1aaf683cf71b09c522c71adebb827c20285100"]
+              "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724",
+              "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca",
+              "0x2c4b4edd628bcffffbf4a9d434ce83e4737889b65eee922f00d3c2b2d82b3394",
+              "0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf",
+              "0x0d1a4f4d19f4aaaaf01cfc1eee2c24294653ab376fb0daf319ae6fdb2063c4a3",
+              "0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3",
+              "0x19562143481eeeea9051659e5a1aaf683cf71b09c522c71adebb827c20285100"]
 
 PT_STUDY = "4a0155d9-501e-477d-868c-c81d22d88ec2"
 PT_SEARCH = "6882580c-3336-44da-b6f1-225d7df71b3f"
@@ -49,34 +56,75 @@ PT_SURVEY = "eb2cab68-2ee6-42e1-b513-74fb632f8462"
 PT_SIGNAL = "6bdbf3cb-8df8-488c-b4a3-f74ca523a528"
 PT_TRANSFORM = "ba66f379-7f8e-4071-8667-471ceaacb018"
 
+MB_MONKEY = "dac8c208-e386-4b1f-8003-b43dbde3dc3f"
+MB_FROGGI = "7b75e90b-47e0-4b38-8dfc-61feab3a9429"
+MB_ASTRONAUT = "47400769-a0e8-4763-8f42-82e3566ff512"
+MB_ROCKSTAR = "b0d4b56d-86cf-41af-ae4e-1689f1681c1b"
+MB_REPORTER = "0755529b-60a1-4432-a129-8079bd83868d"
+MB_ADAM = "64af3bd4-f0e7-4cce-b05f-cd2a438644b2"
+MB_LIST = [MB_MONKEY, MB_FROGGI, MB_ASTRONAUT, MB_ROCKSTAR, MB_REPORTER, MB_ADAM]
 
-def save_nft_holders(nft_id, file_name):
-    nft = Nft(nft_id)
+
+
+
+def save_nft_holders(nft_id=None, nftData=None):
     lr = loopring.LoopringAPI()
     date = datetime.now().strftime("%Y-%m-%d")
-    if not os.path.exists(NFT_HOLDERS_FOLDER):
-        os.makedirs(NFT_HOLDERS_FOLDER)
-    filename = NFT_HOLDERS_FOLDER + '\\' + date + ' ' + \
-               "".join(x for x in nft.get_name() if (x.isalnum() or x in "._- ")) + '.csv'
-    print(f"Writing to {filename}")
-    total_holders, nft_holders = lr.get_nft_holders(nft.data['nftData'])
+    date_and_time = datetime.now().strftime("%Y-%m-%d %H-%M")
+    folder = f"NFT_Holders\\{date}"
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
+    if nftData is None:
+        nft = Nft(nft_id)
+
+        filename = folder + '\\' + date_and_time + ' ' + \
+                   ''.join(x for x in nft.get_name() if (x.isalnum() or x in "._- ")) + '.csv'
+        print(f"Writing to {filename}")
+        total_holders, nft_holders = lr.get_nft_holders(nft.data['nftData'])
+        print(nft_holders)
+        nft_name = nft.get_name()
+        nftId = nft.get_nftId()
+    else:
+        filename = folder + '\\' + date_and_time + ' ' + \
+                   ''.join(x for x in nftData if (x.isalnum() or x in "._- ")) + '.csv'
+        print(f"Writing to {filename}")
+        total_holders, nft_holders = lr.get_nft_holders(nftData)
+        nft_name = nftData
+        nftId = nftData
+
 
     with open(filename, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(['NFT Name', nft.get_name()])
-        writer.writerow(['NFT ID', nft.get_nftId()])
+        writer.writerow(['NFT Name', nft_name])
+        writer.writerow(['NFT ID', nftId])
         writer.writerow(['Data Retrieved', datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
         writer.writerow(['Total Holders', total_holders])
         writer.writerow([''])
-        writer.writerow(['user', 'amount', 'account value'])
+        writer.writerow(['user', 'amount', 'address', 'accountId', 'cost basis (ETH)', 'cost basis (USD)'])
 
         holders_sorted = sorted(nft_holders, key=lambda d: int(d['amount']), reverse=True)
 
-        for holder in holders_sorted:
-            print(holder)
-            writer.writerow([holder['user'], holder['amount']])
+        number_of_holders_for_cost_basis = 10
+        for i in range(number_of_holders_for_cost_basis):
+            if nftData is None:
+                cost_basis = get_user_average_cost(nft_id, holders_sorted[i]['accountId'])
+            else:
+                cost_basis = {'average_cost': 0, 'average_cost_usd': 0}
+            holders_sorted[i]['cost_basis'] = cost_basis['average_cost']
+            holders_sorted[i]['cost_basis_usd'] = cost_basis['average_cost_usd']
 
-    print("Finished! " + str(total_holders) + " holders found.")
+        for idx, holder in enumerate(holders_sorted):
+            print(holder)
+            if idx < number_of_holders_for_cost_basis:
+                writer.writerow([holder['user'], holder['amount'], holder['address'], holder['accountId'], holder['cost_basis'], holder['cost_basis_usd']])
+            else:
+                writer.writerow([holder['user'], holder['amount'], holder['address'], holder['accountId']])
+
+    print(f"Finished! {total_holders} holders of {nft_name} found.")
+
+    return filename
+
 
 def plot_chrome_claw_holders():
     lr = loopring.LoopringAPI()
@@ -109,19 +157,44 @@ def plot_chrome_claw_holders():
     print(holders_dict)
 
 
-
-
-
 def get_historical_crypto_data(currency, start_date):
     print(f"Getting historical data for {currency} starting at {start_date}")
 
     return CoinbaseAPI(f'{currency}-USD', start_date).retrieve_data()
 
 
-def dump_nft_holders():
-    full_set = [CC_10_WORLDS, CC_CHROME_CANNON, CC_CLONE_CARD, CC_CAN_D, CC_CLONE, CC_CYBER_CYCLE, CC_LOADING_LEVEL, CC_CLONE_CENTER]
-    for nft in full_set:
-        save_nft_holders(nft, f"Cyber Crew Owners List")
+def dump_nft_holders(nftId_list=None, output_filename=None):
+    if nftId_list is None:
+        full_set = [CC_10_WORLDS, CC_CHROME_CANNON, CC_CLONE_CARD, CC_CAN_D, CC_CLONE, CC_CYBER_CYCLE, CC_LOADING_LEVEL,
+                    CC_CLONE_CENTER]
+    else:
+        full_set = nftId_list
+
+    if output_filename is None:
+        for nft in full_set:
+            save_nft_holders(nft)
+    else:
+    # Save the NFT holders to CSV files, then combine them into an XLSX file
+        filenames = []
+        for nft in full_set:
+            filenames.append([save_nft_holders(nft), "".join(x for x in Nft(nft).get_name() if (x.isalnum() or x in "._- "))])
+        date = datetime.now().strftime("%Y-%m-%d")
+        date_and_time = datetime.now().strftime("%Y-%m-%d %H-%M")
+        full_filename = f"NFT_Holders\\{date}\\{date_and_time} {output_filename}.xlsx"
+
+        workbook = Workbook(full_filename)
+        for csv_file in filenames:
+            if len(csv_file[1]) > 30:
+                csv_file[1] = csv_file[1][:30]
+            worksheet = workbook.add_worksheet(csv_file[1])
+            with open(csv_file[0], 'rt', encoding='utf8') as f:
+                reader = csv.reader(f)
+                for r, row in enumerate(reader):
+                    for c, col in enumerate(row):
+                        worksheet.write(r, c, col)
+        workbook.close()
+
+
 
 def update_historical_crypto_data(currency):
     nf = nifty.NiftyDB()
@@ -131,33 +204,41 @@ def update_historical_crypto_data(currency):
     nf.insert_historical_price_data(currency, data[1:])
     nf.close()
 
+
 def print_trade_history(nft_id):
     nf = nifty.NiftyDB()
     trade_history = nf.get_nft_trade_history(nft_id)
     for row in trade_history:
         time = datetime.fromtimestamp(row['createdAt']).strftime('%Y-%m-%d %H:%M:%S')
         print(
-            f"{time} {row['buyer']} bought {row['amount']}x from {row['seller']} at {row['price']} ETH (${row['priceUsd']})")
+            f"{time} {row['buyer']} bought {row['amount']}x from {row['seller']} at {row['price']} ETH "
+            f"(${row['priceUsd']})")
 
-def grab_new_blocks():
+
+def grab_new_blocks(find_missing=False):
     update_historical_crypto_data('ETH')
     lr = loopring.LoopringAPI()
     nf = nifty.NiftyDB()
     last_block = nf.get_latest_saved_block()
     if last_block is None:
         last_block = 24340
+    if find_missing:
+        last_block = 24340
     i = 1
     while True:
-        print(f"Retrieving block {last_block+i}")
+        print(f"Retrieving block {last_block + i}")
+        if nf.check_if_block_exists(last_block + i):
+            i += 1
+            continue
         try:
-            block_data = lr.filter_nft_txs(last_block+i)
+            block_data = lr.filter_nft_txs(last_block + i)
             lr.save_nft_tx(block_data)
             i += 1
-            check_next = lr.get_block(last_block+i)
+            check_next = lr.get_block(last_block + i)
             if 'resultInfo' in check_next:
                 break
         except KeyError:
-            print(f"Block {last_block+i} not found, database is up to date.")
+            print(f"Block {last_block + i} not found, database is up to date.")
             break
 
     print("Looking for new users...")
@@ -165,8 +246,7 @@ def grab_new_blocks():
 
 
 # Plot price history using pandas
-def plot_price_history(nft_id, save_file=False, bg_img=None):
-    nft = Nft(nft_id)
+def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=False):
     nf = nifty.NiftyDB()
     nft_data = nf.get_nft_data(nft_id)
     data = nf.get_nft_trade_history(nft_id)
@@ -177,25 +257,12 @@ def plot_price_history(nft_id, save_file=False, bg_img=None):
     df.set_index('createdAt')
     df = df.loc[df['txType'] == 'SpotTrade']
 
-    floor_df = get_floor_price_history(nft_id)
+    if plot_floor_price:
+        floor_df = get_floor_price_history(nft_id)
 
-
-    '''
-    #histo = px.histogram(x=df.createdAt, text_auto=True)
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
-    fig.add_histogram(x=df.createdAt, name='Volume', texttemplate="%{value}", opacity=0.5, textangle=0, yaxis="y3")
-    fig.add_scatter(x=df.createdAt, y=df.price, name='Price', secondary_y=False, mode='lines+markers', marker=dict(opacity=0.5))
-    fig.add_scatter(x=df.createdAt, y=df.priceUsd, name='Price USD', secondary_y=True, mode='lines+markers', marker=dict(opacity=0.5))
-    fig.add_scatter(x=floor_df.snapshotTime, y=floor_df.floor_price, name='Floor Price', secondary_y=False)
-    fig.add_scatter(x=floor_df.snapshotTime, y=floor_df.floor_price_usd, name='Floor Price USD', secondary_y=True)
-    fig.update_layout(title_text=f"{nft_data['name']} Price History - {datetime.now().strftime('%Y-%m-%d')}")
-    fig.update_xaxes(title_text="Date")
-    fig.update_yaxes(title_text="Price", secondary_y=False)
-    fig.update_yaxes(title_text="Price USD", secondary_y=True)
-    '''
     fig = go.Figure()
     if bg_img:
-        bg_img = Image.open(f'images\{bg_img}.png')
+        bg_img = Image.open(f'images\\{bg_img}.png')
         fig.add_layout_image(
             dict(
                 source=bg_img,
@@ -211,13 +278,14 @@ def plot_price_history(nft_id, save_file=False, bg_img=None):
         )
 
     fig.add_trace(go.Scatter(x=df.createdAt, y=df.price, name='Price (ETH)', mode='lines+markers',
-                    marker=dict(opacity=0.5)))
+                             marker=dict(opacity=0.5)))
     fig.add_trace(go.Scatter(x=df.createdAt, y=df.priceUsd, name='Price (USD)', mode='lines+markers',
-                    marker=dict(opacity=0.5), yaxis="y2"))
-    fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price, name='Floor Price', ))
-    fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price_usd, name='Floor Price USD', yaxis="y2"))
-    fig.add_trace(go.Histogram(x=df.createdAt, name='Volume', texttemplate="%{value}", opacity=0.4, textangle=0, yaxis="y3"))
-
+                             marker=dict(opacity=0.5), yaxis="y2"))
+    if plot_floor_price:
+        fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price, name='Floor Price', ))
+        fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price_usd, name='Floor Price USD', yaxis="y2"))
+    fig.add_trace(
+        go.Histogram(x=df.createdAt, name='Volume', texttemplate="%{value}", opacity=0.4, textangle=0, yaxis="y3"))
 
     fig.update_layout(xaxis=dict(domain=[0, 0.95]), yaxis=dict(title="Price", side="right", position=0.95),
                       yaxis2=dict(title="Price USD", overlaying="y", side="right", position=1),
@@ -228,20 +296,21 @@ def plot_price_history(nft_id, save_file=False, bg_img=None):
 
     fig.show()
 
-
     if save_file:
         folder = f"price_history_charts\\{datetime.now().strftime('%Y-%m-%d')}"
         if not os.path.exists(f"price_history_charts\\{datetime.now().strftime('%Y-%m-%d')}"):
             os.makedirs(f"price_history_charts\\{datetime.now().strftime('%Y-%m-%d')}")
         filename = "".join(x for x in nft_data['name'] if (x.isalnum() or x in "._- ")) + '.png'
 
-        fig.write_image(f"{folder}\\{filename}",width=1600, height=1000)
+        fig.write_image(f"{folder}\\{filename}", width=1600, height=1000)
+
 
 def plot_collection_price_history(collection_id):
     nf = nifty.NiftyDB()
     nfts = nf.get_nfts_in_collection(collection_id)
     for nft in nfts:
         plot_price_history(nft['nftId'], save_file=True)
+
 
 def find_complete_collection_owners():
     CC_NFTDATA = ["0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01",
@@ -264,6 +333,11 @@ def find_complete_collection_owners():
         cc_owned = 0
         creator_owned = 0
         flairdrop_owned = 0
+        factory_owned = 0
+        milk_owned = 0
+        blue_owned = 0
+        red_owned = 0
+        orange_owned = 0
         for nft in owned:
             if any(nft['nftData'] == x for x in CC_NFTDATA):
                 num_owned += 1
@@ -273,38 +347,48 @@ def find_complete_collection_owners():
                 creator_owned = 1
             if nft['nftData'] == FLAIR_DROP:
                 flairdrop_owned = 1
-
+            if nft['nftData'] == CC_FACTORY:
+                factory_owned = 1
+            if nft['nftData'] == CC_BLUE_CUPCAKE:
+                blue_owned = 1
+            if nft['nftData'] == CC_RED_CUPCAKE:
+                red_owned = 1
+            if nft['nftData'] == CC_ORANGE_CUPCAKE:
+                orange_owned = 1
+            if nft['nftData'] == CC_MILK:
+                milk_owned = 1
 
         if num_owned == 7:
             num_owned += cc_owned
             creator_string = ""
             flairdrop_string = ""
+            celebration_string = ""
             if creator_owned:
                 creator_string = " + creator card"
             if flairdrop_owned:
                 flairdrop_string = " + flair drop"
-            print(f"{owner['user']} owns {num_owned}/7{creator_string}{flairdrop_string}")
+            if factory_owned:
+                celebration_string += " + factory"
+            if blue_owned:
+                celebration_string += " + blue"
+            if red_owned:
+                celebration_string += " + red"
+            if orange_owned:
+                celebration_string += " + orange"
+
+
+            print(f"{owner['user']} owns {num_owned}/7{creator_string}{flairdrop_string}{celebration_string}")
+
 
 def get_user_trade_history(username):
-    CC_NFTDATA = ["0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01",
-                  "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724",
-                  "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca",
-                  "0x2c4b4edd628bcffffbf4a9d434ce83e4737889b65eee922f00d3c2b2d82b3394",
-                  "0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf",
-                  "0x0d1a4f4d19f4aaaaf01cfc1eee2c24294653ab376fb0daf319ae6fdb2063c4a3",
-                  "0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3",
-                  "0x19562143481eeeea9051659e5a1aaf683cf71b09c522c71adebb827c20285100"]
-    user = User(username=username)
-    nf = nifty.NiftyDB()
-    trade_history = nf.get_user_trade_history(user.accountId)
+    pass
+
 
 def generate_cc_report():
     nf = nifty.NiftyDB()
     num_tx = nf.get_number_of_tx(CC_NFTDATA)
     print(f"Cyber Crew has {num_tx} transactions")
 
-def plot_nft_collection_transaction_history(collection_id):
-    pass
 
 def print_user_transaction_history(username=None, address=None):
     if address is not None:
@@ -323,9 +407,12 @@ def print_user_transaction_history(username=None, address=None):
                 print(f"{time} {row['seller']} transferred {row['amount']}x to {row['buyer']}")
         elif row['txType'] == 'SpotTrade':
             if row['buyerAccount'] == user.accountId:
-                print(f"{time} {row['buyer']} bought {row['amount']}x {row['name']} from {row['seller']} at {row['price']} (${row['priceUsd']})")
+                print(
+                    f"{time} {row['buyer']} bought {row['amount']}x {row['name']} from {row['seller']} at {row['price']} (${row['priceUsd']})")
             if row['sellerAccount'] == user.accountId:
-                print(f"{time} {row['seller']} sold {row['amount']}x {row['name']} to {row['buyer']} at {row['price']} (${row['priceUsd']})")
+                print(
+                    f"{time} {row['seller']} sold {row['amount']}x {row['name']} to {row['buyer']} at {row['price']} (${row['priceUsd']})")
+
 
 def plot_user_transaction_history(user_id):
     user = User(user_id)
@@ -337,56 +424,87 @@ def plot_user_transaction_history(user_id):
     df.createdAt = pd.to_datetime(df.createdAt, unit='s')
     df.set_index('createdAt')
 
-    df_clone_card_buy = df[(df['nftData'] == "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724") & (df['buyerAccount'] == user.accountId)]
-    df_clone_buy = df[(df['nftData'] == "0x2c4b4edd628bcffffbf4a9d434ce83e4737889b65eee922f00d3c2b2d82b3394") & (df['buyerAccount'] == user.accountId)]
-    df_10_worlds_buy = df[(df['nftData'] == "0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01") & (df['buyerAccount'] == user.accountId)]
-    df_cand_buy = df[(df['nftData'] == "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca") & (df['buyerAccount'] == user.accountId)]
-    df_cyber_cycle_buy = df[(df['nftData'] == "0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf") & (df['buyerAccount'] == user.accountId)]
-    df_loading_level_buy = df[(df['nftData'] == "0x0d1a4f4d19f4aaaaf01cfc1eee2c24294653ab376fb0daf319ae6fdb2063c4a3") & (df['buyerAccount'] == user.accountId)]
-    df_chrome_cannon_buy = df[(df['nftData'] == "0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3") & (df['buyerAccount'] == user.accountId)]
+    df_clone_card_buy = df[(df['nftData'] == "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724") & (
+            df['buyerAccount'] == user.accountId)]
+    df_clone_buy = df[(df['nftData'] == "0x2c4b4edd628bcffffbf4a9d434ce83e4737889b65eee922f00d3c2b2d82b3394") & (
+            df['buyerAccount'] == user.accountId)]
+    df_10_worlds_buy = df[(df['nftData'] == "0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01") & (
+            df['buyerAccount'] == user.accountId)]
+    df_cand_buy = df[(df['nftData'] == "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca") & (
+            df['buyerAccount'] == user.accountId)]
+    df_cyber_cycle_buy = df[(df['nftData'] == "0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf") & (
+            df['buyerAccount'] == user.accountId)]
+    df_loading_level_buy = df[
+        (df['nftData'] == "0x0d1a4f4d19f4aaaaf01cfc1eee2c24294653ab376fb0daf319ae6fdb2063c4a3") & (
+                df['buyerAccount'] == user.accountId)]
+    df_chrome_cannon_buy = df[
+        (df['nftData'] == "0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3") & (
+                df['buyerAccount'] == user.accountId)]
 
-    df_clone_card_sell = df[(df['nftData'] == "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724") & (df['sellerAccount'] == user.accountId)]
-    df_clone_sell = df[(df['nftData'] == "0x2c4b4edd628bcffffbf4a9d434ce83e4737889b65eee922f00d3c2b2d82b3394") & (df['sellerAccount'] == user.accountId)]
-    df_10_worlds_sell = df[(df['nftData'] == "0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01") & (df['sellerAccount'] == user.accountId)]
-    df_cand_sell = df[(df['nftData'] == "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca") & (df['sellerAccount'] == user.accountId)]
-    df_cyber_cycle_sell = df[(df['nftData'] == "0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf") & (df['sellerAccount'] == user.accountId)]
-    df_loading_level_sell = df[(df['nftData'] == "0x0d1a4f4d19f4aaaaf01cfc1eee2c24294653ab376fb0daf319ae6fdb2063c4a3") & (df['sellerAccount'] == user.accountId)]
-    df_chrome_cannon_sell = df[(df['nftData'] == "0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3") & (df['sellerAccount'] == user.accountId)]
+    df_clone_card_sell = df[(df['nftData'] == "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724") & (
+            df['sellerAccount'] == user.accountId)]
+    df_clone_sell = df[(df['nftData'] == "0x2c4b4edd628bcffffbf4a9d434ce83e4737889b65eee922f00d3c2b2d82b3394") & (
+            df['sellerAccount'] == user.accountId)]
+    df_10_worlds_sell = df[(df['nftData'] == "0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01") & (
+            df['sellerAccount'] == user.accountId)]
+    df_cand_sell = df[(df['nftData'] == "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca") & (
+            df['sellerAccount'] == user.accountId)]
+    df_cyber_cycle_sell = df[(df['nftData'] == "0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf") & (
+            df['sellerAccount'] == user.accountId)]
+    df_loading_level_sell = df[
+        (df['nftData'] == "0x0d1a4f4d19f4aaaaf01cfc1eee2c24294653ab376fb0daf319ae6fdb2063c4a3") & (
+                df['sellerAccount'] == user.accountId)]
+    df_chrome_cannon_sell = df[
+        (df['nftData'] == "0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3") & (
+                df['sellerAccount'] == user.accountId)]
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
     base_size = 20
 
-
-    fig.add_scatter(x=df_clone_card_buy.createdAt, y=df_clone_card_buy['price'], name="Clone Card", mode='markers+lines',
-                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
+    fig.add_scatter(x=df_clone_card_buy.createdAt, y=df_clone_card_buy['price'], name="Clone Card",
+                    mode='markers+lines',
+                    marker=dict(size=df_clone_card_buy['amount'] * base_size), secondary_y=False)
     fig.add_scatter(x=df_clone_buy.createdAt, y=df_clone_buy['price'], name="Clone", mode='markers+lines',
-                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
+                    marker=dict(size=df_clone_card_buy['amount'] * base_size), secondary_y=False)
     fig.add_scatter(x=df_10_worlds_buy.createdAt, y=df_10_worlds_buy['price'], name="10 Worlds", mode='markers+lines',
-                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
+                    marker=dict(size=df_clone_card_buy['amount'] * base_size), secondary_y=False)
     fig.add_scatter(x=df_cand_buy.createdAt, y=df_cand_buy['price'], name="Candidate", mode='markers+lines',
-                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
-    fig.add_scatter(x=df_cyber_cycle_buy.createdAt, y=df_cyber_cycle_buy['price'], name="Cyber Cycle", mode='markers+lines',
-                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
-    fig.add_scatter(x=df_loading_level_buy.createdAt, y=df_loading_level_buy['price'], name="Loading Level", mode='markers+lines',
-                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
-    fig.add_scatter(x=df_chrome_cannon_buy.createdAt, y=df_chrome_cannon_buy['price'], name="Chrome Cannon", mode='markers+lines',
-                    marker=dict(size=df_clone_card_buy['amount']*base_size), secondary_y=False)
+                    marker=dict(size=df_clone_card_buy['amount'] * base_size), secondary_y=False)
+    fig.add_scatter(x=df_cyber_cycle_buy.createdAt, y=df_cyber_cycle_buy['price'], name="Cyber Cycle",
+                    mode='markers+lines',
+                    marker=dict(size=df_clone_card_buy['amount'] * base_size), secondary_y=False)
+    fig.add_scatter(x=df_loading_level_buy.createdAt, y=df_loading_level_buy['price'], name="Loading Level",
+                    mode='markers+lines',
+                    marker=dict(size=df_clone_card_buy['amount'] * base_size), secondary_y=False)
+    fig.add_scatter(x=df_chrome_cannon_buy.createdAt, y=df_chrome_cannon_buy['price'], name="Chrome Cannon",
+                    mode='markers+lines',
+                    marker=dict(size=df_clone_card_buy['amount'] * base_size), secondary_y=False)
 
-    fig.add_scatter(x=df_clone_card_sell.createdAt, y=df_clone_card_sell['price'], name="Clone Card (Sell)", mode='markers+lines',
-                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
+    fig.add_scatter(x=df_clone_card_sell.createdAt, y=df_clone_card_sell['price'], name="Clone Card (Sell)",
+                    mode='markers+lines',
+                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False,
+                    marker_symbol='cross')
     fig.add_scatter(x=df_clone_sell.createdAt, y=df_clone_sell['price'], name="Clone (Sell)", mode='markers+lines',
-                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
-    fig.add_scatter(x=df_10_worlds_sell.createdAt, y=df_10_worlds_sell['price'], name="10 Worlds (Sell)", mode='markers+lines',
-                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
+                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False,
+                    marker_symbol='cross')
+    fig.add_scatter(x=df_10_worlds_sell.createdAt, y=df_10_worlds_sell['price'], name="10 Worlds (Sell)",
+                    mode='markers+lines',
+                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False,
+                    marker_symbol='cross')
     fig.add_scatter(x=df_cand_sell.createdAt, y=df_cand_sell['price'], name="CAN-D (Sell)", mode='markers+lines',
-                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
-    fig.add_scatter(x=df_cyber_cycle_sell.createdAt, y=df_cyber_cycle_sell['price'], name="Cyber Cycle (Sell)", mode='markers+lines',
-                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
+                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False,
+                    marker_symbol='cross')
+    fig.add_scatter(x=df_cyber_cycle_sell.createdAt, y=df_cyber_cycle_sell['price'], name="Cyber Cycle (Sell)",
+                    mode='markers+lines',
+                    marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False,
+                    marker_symbol='cross')
     fig.add_scatter(x=df_loading_level_sell.createdAt, y=df_loading_level_sell['price'], name="Loading Level (Sell)",
-                    mode='markers+lines', marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
+                    mode='markers+lines', marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False,
+                    marker_symbol='cross')
     fig.add_scatter(x=df_chrome_cannon_sell.createdAt, y=df_chrome_cannon_sell['price'], name="Chrome Cannon (Sell)",
-                    mode='markers+lines', marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False, marker_symbol='cross')
+                    mode='markers+lines', marker=dict(size=df_clone_card_sell['amount'] * base_size), secondary_y=False,
+                    marker_symbol='cross')
 
     fig.update_layout(title_text=f"{user.username}'s Transaction History")
     fig.update_xaxes(title_text="Date")
@@ -411,10 +529,11 @@ def plot_collections_cumulative_volume(collectionId_list, start_date=None, save_
             start = pd.to_datetime(start_date)
             df = df[df.createdAt >= start]
 
-        fig.add_scatter(x=df.createdAt, y=df.volume.cumsum(), name="Cyber Crew Volume (ETH)", secondary_y=False)
-        fig.add_scatter(x=df.createdAt, y=df.volume_usd.cumsum(), name="Cyber Crew Volume (USD)", mode='lines', secondary_y=True)
+        fig.add_scatter(x=df.createdAt, y=df.volume.cumsum(), name="Volume (ETH)", secondary_y=False)
+        fig.add_scatter(x=df.createdAt, y=df.volume_usd.cumsum(), name="Volume (USD)", mode='lines',
+                        secondary_y=True)
         fig.add_histogram(x=df.createdAt, opacity=0.4, name="# Trades")
-        #fig = px.line(x=df.createdAt, y=df.volume.cumsum(), title="Cyber Crew Volume (ETH)")
+        # fig = px.line(x=df.createdAt, y=df.volume.cumsum(), title="Cyber Crew Volume (ETH)")
 
         fig.update_layout(title_text=f"Cyber Crew Cumulative Volume - {datetime.now().strftime('%Y-%m-%d')}",
                           template="plotly_dark")
@@ -429,23 +548,11 @@ def plot_collections_cumulative_volume(collectionId_list, start_date=None, save_
             os.makedirs(f"cumulative_volume_charts\\{datetime.now().strftime('%Y-%m-%d')}")
         filename = datetime.now().strftime('%Y-%m-%d') + ' - Cyber Crew Cumulative Volume.png'
 
-        fig.write_image(f"{folder}\\{filename}",width=1600, height=1000)
+        fig.write_image(f"{folder}\\{filename}", width=1600, height=1000)
 
-def grab_and_save_orders(nftId_list):
+def get_floor_price_history(nftId, collection="cybercrew"):
     nf = nifty.NiftyDB()
-    snapshot_time = int(datetime.timestamp(datetime.now()))
-    for nftId in nftId_list:
-        nft = Nft(nftId)
-        orders = nft.get_orders()
-        print(f"Pulled {len(orders)} orders for {nft.get_name()}")
-        for order in orders:
-            nf.insert_cc_order(order['orderId'], order['nftId'], order['collectionId'], order['nftData'],
-                               order['ownerAddress'], order['amount'], order['fulfilledAmount'], order['pricePerNft'],
-                               int(datetime.timestamp(order['createdAt'])), snapshot_time)
-
-def get_floor_price_history(nftId):
-    nf = nifty.NiftyDB()
-    snapshotTimes, orderbook = nf.get_orderbook_data(nftId)
+    snapshotTimes, orderbook = nf.get_orderbook_data(nftId, collection=collection)
     df = pd.DataFrame(orderbook, columns=['username', 'address', 'amount', 'price', 'orderId', 'fullfilledAmount',
                                           'nft_name', 'nftId', 'snapshotTime'])
     floor_price_history = []
@@ -465,21 +572,36 @@ def get_floor_price_history(nftId):
 
     return floor_df
 
-def get_latest_orderbook_data(nftId, use_live_data=False):
+
+def grab_and_save_orders(nftId_list, collection='cybercrew'):
+    nf = nifty.NiftyDB()
+    snapshot_time = int(datetime.timestamp(datetime.now()))
+    for nftId in nftId_list:
+        nft = Nft(nftId)
+        orders = nft.get_orders()
+        print(f"Pulled {len(orders)} orders for {nft.get_name()}")
+
+        for order in orders:
+            nf.insert_order(collection, order['orderId'], order['nftId'], order['collectionId'], order['nftData'],
+                            order['ownerAddress'], order['amount'], order['fulfilledAmount'], order['pricePerNft'],
+                            int(datetime.timestamp(order['createdAt'])), snapshot_time)
+
+
+def get_latest_orderbook_data(nftId, collection="cybercrew", use_live_data=False):
     if use_live_data:
-        grab_and_save_orders([nftId])
+        grab_and_save_orders([nftId], collection)
 
     nf = nifty.NiftyDB()
-    snapshotTimes, orderbook = nf.get_orderbook_data(nftId)
+    snapshotTimes, orderbook = nf.get_orderbook_data(nftId, collection)
     df = pd.DataFrame(orderbook, columns=['username', 'address', 'amount', 'price', 'orderId', 'fullfilledAmount',
                                           'nft_name', 'nftId', 'snapshotTime'])
     df.set_index('snapshotTime')
     df = df[df['snapshotTime'] == snapshotTimes[-1]['snapshotTime']]
-
     return df
 
-def analyze_latest_orderbook(nftId, next_goal, use_live_data=False):
-    data = get_latest_orderbook_data(nftId, use_live_data=use_live_data)
+
+def analyze_latest_orderbook(nftId, next_goal, use_live_data=False, collection="cybercrew"):
+    data = get_latest_orderbook_data(nftId, collection=collection, use_live_data=use_live_data)
     data = data.loc[data['nftId'] == nftId]
     floor_price = data['price'].min()
 
@@ -499,12 +621,16 @@ def analyze_latest_orderbook(nftId, next_goal, use_live_data=False):
             sale_list.append(sale)
         seller['orders'] = sale_list
         sellers_list.append(seller)
-
-    sellers_list = sorted(sellers_list, key=lambda d: d['username'])
+    sellers_list = sorted(sellers_list, key=lambda d: d['total_amount'], reverse=True)
     total_for_sale = 0
     floor_plus_20 = 0
     floor_plus_50 = 0
     til_next_goal = 0
+
+    print(f"{data['nft_name'].iloc[0]}")
+    print("---------------------------------------")
+
+    info = []
     for seller in sellers_list:
 
         info_str = f"{seller['username']} has {seller['total_amount']}x for sale. Orders: "
@@ -513,22 +639,24 @@ def analyze_latest_orderbook(nftId, next_goal, use_live_data=False):
             info_str += f"{order['amount']}x @ {order['price']} ETH, "
             if index == len(seller['orders']) - 1:
                 info_str = info_str[:-2]
-            if order['price'] <= floor_price*1.2:
+            if order['price'] <= floor_price * 1.2:
                 floor_plus_20 += order['amount']
-            if order['price'] <= floor_price*1.5:
+            if order['price'] <= floor_price * 1.5:
                 floor_plus_50 += order['amount']
             if order['price'] < next_goal:
                 til_next_goal += order['amount']
-        #print(info_str)
+        info.append(info_str)
 
-
-    print(f"{data['nft_name'].iloc[0]}")
-    print("---------------------------------------")
     print(f"Total for sale: {total_for_sale}")
     print(f"Floor price: {floor_price} ETH")
-    print(f"Number up to floor + 20% ({round(floor_price*1.2,2)} ETH): {floor_plus_20}")
-    print(f"Number up to floor + 50% ({round(floor_price*1.5,2)} ETH): {floor_plus_50}")
+    print(f"Number up to floor + 20% ({round(floor_price * 1.2, 2)} ETH): {floor_plus_20}")
+    print(f"Number up to floor + 50% ({round(floor_price * 1.5, 2)} ETH): {floor_plus_50}")
     print(f"Number for sale before {next_goal} ETH: {til_next_goal}")
+    print(f"\n")
+    for info_str in info:
+        print(info_str)
+
+    print("\n\n")
 
 
 def plot_trade_tree(nftId):
@@ -537,10 +665,10 @@ def plot_trade_tree(nftId):
     G = nx.Graph()
     trade_data = nf.get_nft_trade_history(nftId)
     df = pd.DataFrame(trade_data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
-                      'amount', 'price', 'priceUsd', 'seller', 'buyer'])
+                                           'amount', 'price', 'priceUsd', 'seller', 'buyer'])
     for index, row in df.iterrows():
         G.add_node(row['sellerAccount'])
-        #G._node[row['sellerAccount']]['name'] = row['seller']
+        # G._node[row['sellerAccount']]['name'] = row['seller']
     for index, row in df.iterrows():
         G.add_edge(row['sellerAccount'], row['buyerAccount'])
     print(nx.info(G))
@@ -552,7 +680,6 @@ def plot_trade_tree(nftId):
     edge_x = []
     edge_y = []
     for edge in G.edges():
-
         x0, y0 = G.nodes[edge[0]]['pos']
         x1, y1 = G.nodes[edge[1]]['pos']
         edge_x.append(x0)
@@ -606,6 +733,7 @@ def plot_trade_tree(nftId):
     node_trace.marker.color = node_adjacencies
     node_trace.text = node_text
 
+    # noinspection PyTypeChecker
     fig = go.Figure(data=[edge_trace, node_trace],
                     layout=go.Layout(
                         title='<br>Network graph made with Python',
@@ -623,15 +751,14 @@ def plot_trade_tree(nftId):
                     )
     fig.show()
 
-#
-# Function to grab a list of mint buyers and check if they still hold any copies of the NFT
-#
+
 def analyze_mint_buyers(nftId):
+
     nf = nifty.NiftyDB()
     nft_name = Nft(nftId).get_name()
     trade_data = nf.get_nft_trade_history(nftId)
     df = pd.DataFrame(trade_data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
-                      'amount', 'price', 'priceUsd', 'seller', 'buyer'])
+                                           'amount', 'price', 'priceUsd', 'seller', 'buyer'])
     mint_buyers = df[df['sellerAccount'] == 92477]
     buyers_dict = dict()
     for index, buyer in mint_buyers.iterrows():
@@ -646,8 +773,8 @@ def analyze_mint_buyers(nftId):
             buyer_info['amount'] = buyer['amount']
             buyer_info['amount_paid'] = buyer['price'] * buyer['amount']
             buyer_info['amount_paid_usd'] = buyer['priceUsd'] * buyer['amount']
-            buyer_info['profits'] = -1*buyer['price']*buyer['amount']
-            buyer_info['profits_usd'] = -1*buyer['priceUsd']*buyer['amount']
+            buyer_info['profits'] = -1 * buyer['price'] * buyer['amount']
+            buyer_info['profits_usd'] = -1 * buyer['priceUsd'] * buyer['amount']
             buyer_info['cost_basis'] = buyer['price']
             buyer_info['cost_basis_usd'] = buyer['priceUsd']
             buyers_dict[buyer['buyerAccount']] = buyer_info
@@ -662,8 +789,10 @@ def analyze_mint_buyers(nftId):
             buyers_dict[mint_buyer]['amount_paid_usd'] += purchase['priceUsd'] * purchase['amount']
             buyers_dict[mint_buyer]['profits'] -= purchase['price'] * purchase['amount']
             buyers_dict[mint_buyer]['profits_usd'] -= purchase['priceUsd'] * purchase['amount']
-            buyers_dict[mint_buyer]['cost_basis'] = buyers_dict[mint_buyer]['amount_paid'] / buyers_dict[mint_buyer]['amount']
-            buyers_dict[mint_buyer]['cost_basis_usd'] = buyers_dict[mint_buyer]['amount_paid_usd'] / buyers_dict[mint_buyer]['amount']
+            buyers_dict[mint_buyer]['cost_basis'] = buyers_dict[mint_buyer]['amount_paid'] / buyers_dict[mint_buyer][
+                'amount']
+            buyers_dict[mint_buyer]['cost_basis_usd'] = buyers_dict[mint_buyer]['amount_paid_usd'] / \
+                                                        buyers_dict[mint_buyer]['amount']
         # Subtract the sales
         mint_buyer_sales = df[df['sellerAccount'] == mint_buyer]
         for index, sale in mint_buyer_sales.iterrows():
@@ -673,18 +802,20 @@ def analyze_mint_buyers(nftId):
             buyers_dict[mint_buyer]['profits'] += sale['price'] * sale['amount']
             buyers_dict[mint_buyer]['profits_usd'] += sale['priceUsd'] * sale['amount']
             if buyers_dict[mint_buyer]['amount'] > 0:
-                buyers_dict[mint_buyer]['cost_basis'] = buyers_dict[mint_buyer]['amount_paid'] / buyers_dict[mint_buyer]['amount']
-                buyers_dict[mint_buyer]['cost_basis_usd'] = buyers_dict[mint_buyer]['amount_paid_usd'] / buyers_dict[mint_buyer]['amount']
+                buyers_dict[mint_buyer]['cost_basis'] = buyers_dict[mint_buyer]['amount_paid'] / \
+                                                        buyers_dict[mint_buyer]['amount']
+                buyers_dict[mint_buyer]['cost_basis_usd'] = buyers_dict[mint_buyer]['amount_paid_usd'] / \
+                                                            buyers_dict[mint_buyer]['amount']
             else:
                 buyers_dict[mint_buyer]['cost_basis'] = 0
                 buyers_dict[mint_buyer]['cost_basis_usd'] = 0
         amount_remaining = buyers_dict[mint_buyer]['amount']
         if amount_remaining == 0:
             print(f"{buyers_dict[mint_buyer]['name']} sold all of their {nft_name} and cashed out with a profit of "
-                  f"{round(buyers_dict[mint_buyer]['profits'],2)} ETH (${round(buyers_dict[mint_buyer]['profits_usd'],2)})")
+                  f"{round(buyers_dict[mint_buyer]['profits'], 2)} ETH (${round(buyers_dict[mint_buyer]['profits_usd'], 2)})")
         elif amount_remaining < 0:
-            print(f"{buyers_dict[mint_buyer]['name']} calculated to have less than 0 remaining, incomplete transaction data?")
-
+            print(
+                f"{buyers_dict[mint_buyer]['name']} calculated to have less than 0 remaining, incomplete transaction data?")
 
 
 def pull_usernames_from_transactions(blockId=None):
@@ -692,17 +823,18 @@ def pull_usernames_from_transactions(blockId=None):
     lr = loopring.LoopringAPI()
     user_tx = nf.get_all_gamestop_nft_users(blockId=blockId)
     for user in user_tx:
-        #Check to see if in database first
+        # Check to see if in database first
         _, _, username = nf.get_user_info(accountId=user['buyerAccount'])
         if username is None:
             address = lr.get_user_address(user['buyerAccount'])
             new_user = User(address=address)
             print(f"Retrieved username for {user['buyerAccount']}: {new_user.username}")
 
+
 # Function to be called periodically to check if user has set a username and update DB if so
 def check_for_new_usernames():
+
     nf = nifty.NiftyDB()
-    lr = loopring.LoopringAPI()
     users = nf.get_users_without_usernames()
     new_usernames_found = 0
     for user in users:
@@ -711,6 +843,61 @@ def check_for_new_usernames():
         if len(new_username) != 42:
             new_usernames_found += 1
     print(f"New username check complete")
+
+
+def get_discord_server_stats(invite_code):
+    """
+    Get stats for a discord server
+    :param invite_code:
+    :return:
+    """
+    disc = discord.DiscordAPI(invite_code)
+    stats = dict()
+    stats['serverId'] = disc.serverId
+    stats['serverName'] = disc.server_name
+    stats['num_members'] = disc.num_members
+    stats['num_active'] = disc.num_active
+    stats['timestamp'] = int(datetime.now().timestamp())
+    print(f"[{stats['timestamp']}] {stats['serverName']} has {stats['num_members']} total members and "
+          f"{stats['num_active']} are currently active.")
+    return stats
+
+
+def save_discord_server_stats(serverId):
+    stats = get_discord_server_stats(serverId)
+    nf = nifty.NiftyDB()
+    nf.insert_discord_server_stats(stats['serverId'], stats['serverName'], stats['timestamp'],
+                                   stats['num_members'], stats['num_active'])
+
+
+def plot_discord_server_stats(serverId, save_file=False, server_name="CyberCrew"):
+    nf = nifty.NiftyDB()
+    stats = nf.get_discord_server_stats(serverId)
+
+    fig = make_subplots(specs=[[{"secondary_y": False}]])
+    df = pd.DataFrame(stats, columns=['serverId', 'serverName', 'timestamp', 'num_members', 'num_online'])
+    df.timestamp = pd.to_datetime(df.timestamp, unit='s')
+    server_name = df.iloc[0].serverName
+    df.set_index('timestamp')
+    df = df.sort_values(by='timestamp')
+
+    fig.add_scatter(x=df.timestamp, y=df.num_members, name="Total Members", mode='lines+markers')
+    fig.add_scatter(x=df.timestamp, y=df.num_online, name="Members Online", mode='lines+markers')
+
+    fig.update_layout(title_text=f"{server_name} Discord Server Stats - {datetime.now().strftime('%Y-%m-%d')}",
+                      template="plotly_dark", xaxis_dtick=86400000)
+    fig.update_xaxes(title_text="Date")
+    fig.update_yaxes(title_text="Members", secondary_y=False)
+    fig.show()
+
+    if save_file:
+        folder = f"Discord_Charts\\{datetime.now().strftime('%Y-%m-%d')}"
+        if not os.path.exists(f"Discord_Charts\\{datetime.now().strftime('%Y-%m-%d')}"):
+            os.makedirs(f"Discord_Charts\\{datetime.now().strftime('%Y-%m-%d')}")
+        filename = "".join(x for x in server_name if (x.isalnum() or x in "._- ")) + '.png'
+
+        fig.write_image(f"{folder}\\{filename}", width=1600, height=1000)
+
 
 def get_user_average_hold_time(nftId, accountId=None, end_time=None, username=None, address=None):
     if accountId is not None:
@@ -738,6 +925,7 @@ def get_user_average_hold_time(nftId, accountId=None, end_time=None, username=No
         end_time = pd.Timestamp.utcnow()
     total_hold_time = 0
     running_total_amount = 0
+
     for idx, tx in df.iterrows():
 
         if tx.buyerAccount == user.accountId:
@@ -748,12 +936,19 @@ def get_user_average_hold_time(nftId, accountId=None, end_time=None, username=No
             running_total_amount -= tx.amount
             total_hold_time -= tx.amount * (end_time - tx.createdAt).total_seconds()
 
-    return {'user': user.username, 'accountId': user.accountId, 'amount': running_total_amount,
-            'hold_time': round(total_hold_time/running_total_amount/86400, 2)}
+    try:
+        return {'user': user.username, 'accountId': user.accountId, 'amount': running_total_amount,
+                'hold_time': round(total_hold_time / running_total_amount / 86400, 2)}
+    except ZeroDivisionError:
+        print(f"{user.username} error calculating {user.accountId} average hold time")
+        return None
 
-def calculate_nft_average_hold_time(nftId, end_timestamp=None):
+
+def calculate_holder_stats(nftId, end_timestamp=None, calculate_average=True):
     nft = Nft(nftId)
     lr = loopring.LoopringAPI()
+
+    # Get a list of the holders
     if end_timestamp is None:
         num_holders, holders = lr.get_nft_holders(nft.get_nft_data())
     else:
@@ -763,45 +958,95 @@ def calculate_nft_average_hold_time(nftId, end_timestamp=None):
             holders.append({'accountId': list(holders_dict.keys())[idx], 'amount': list(holders_dict.values())[idx]})
         num_holders = len(holders_dict)
 
-    holder_hold_times = []
+    # Calculate average hold time
+    if calculate_average:
+        holder_hold_times = []
+        with ThreadPoolExecutor(max_workers=40) as executor:
+            futures = [executor.submit(get_user_average_hold_time, nftId, holder['accountId'], end_timestamp)
+                       for holder in holders]
+            for future in futures:
+                holder_hold_times.append(future.result())
+        total_hold_time = 0
+        for entry in holder_hold_times:
+            if entry is not None:
+                total_hold_time += entry['hold_time']
+            else:
+                num_holders -= 1
+        average_hold_time = round(total_hold_time / num_holders, 2)
+    else:
+        average_hold_time = 0
 
-    with ThreadPoolExecutor(max_workers=30) as executor:
-        futures = [executor.submit(get_user_average_hold_time, nftId, holder['accountId'], end_timestamp)
-                   for holder in holders]
-        for future in futures:
-            holder_hold_times.append(future.result())
+    # Get the biggest whale holding
+    biggest_whale = max(holders, key=lambda x: x['amount'])
 
-    total_hold_time = 0
-    for entry in holder_hold_times:
-        total_hold_time += entry['hold_time']
-    average_hold_time = round(total_hold_time / num_holders,2)
+    # Get the amount held by top 3 accounts
+    top_5_accounts = sorted(holders, key=lambda x: x['amount'], reverse=True)[:5]
+    top_3_amount = top_5_accounts[0]['amount'] + top_5_accounts[1]['amount'] + top_5_accounts[2]['amount']
+    top_5_amount = top_5_accounts[0]['amount'] + top_5_accounts[1]['amount'] + top_5_accounts[2]['amount'] + \
+                   top_5_accounts[3]['amount'] + top_5_accounts[4]['amount']
 
-    return average_hold_time
+    # sort holders by amount descending
+    holders.sort(key=lambda x: x['amount'], reverse=True)
 
-def save_average_hold_time(nftId):
+    # Calculate average editions held per holder
+    total_editions = 0
+    for holder in holders:
+        total_editions += holder['amount']
+    average_holding = round(total_editions / num_holders, 2)
+
+
+    # Calculate the median number of edition held per holder
+    #median_amount = round(sum(item.get('amount', 0) for item in holders) / len(holders), 2)
+    amounts = sorted([holder['amount'] for holder in holders], reverse=True)[5:]
+    median_amount = round(np.average(amounts), 2)
+
+    # Build the stats dictionary and return it
+    stats = dict()
+    stats['average_hold_time'] = average_hold_time
+    stats['num_holders'] = num_holders
+    stats['whale_amount'] = biggest_whale['amount']
+    stats['top3'] = top_3_amount
+    stats['top5'] = top_5_amount
+    stats['avg_amount'] = average_holding
+    stats['median_amount'] = median_amount
+
+    return stats
+
+
+def save_holder_stats(nftId):
     nft = Nft(nftId)
     db = nifty.NiftyDB()
     first_sale = db.get_first_sale(nft.get_nft_data())
     last_entry = nifty.NiftyDB().get_last_hold_time_entry(nftId)
 
+
+    # Check to see if there's any existing data for this NFT in the database and adjust start time accordingly
     if last_entry is None:
         start = int(datetime.strptime("2022-01-01-00-00Z", "%Y-%m-%d-%H-%M%z").timestamp())
-        start_timestamp = range(start, first_sale+86401, 86400)[-1]
+        start_timestamp = range(start, first_sale + 86401, 86400)[-1]
     else:
         if last_entry + 86400 > datetime.now().timestamp():
             print(f"Average hold time for {nft.get_name()} is up to date")
             return None
         else:
-            start_timestamp = last_entry+86400
-
+            start_timestamp = last_entry + 86400
     end_timestamp = int(datetime.now().timestamp())
-    for timestamp in range(start_timestamp, end_timestamp, 86400):
-        average_hold_time = calculate_nft_average_hold_time(nftId, timestamp)
-        print(f"Average hold time for {nft.get_name()} at {datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d')}"
-              f" is {average_hold_time} days, inserting into DB")
-        db.insert_hold_time(nftId, timestamp, average_hold_time)
 
-# Returns a dictionary of the accountId
+    for timestamp in range(start_timestamp, end_timestamp, 86400):
+        stats = calculate_holder_stats(nftId, timestamp)
+        print(f"Average hold time for {nft.get_name()} at {datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d')}"
+              f" is {stats['average_hold_time']} days, whale holds {stats['whale_amount']}, "
+              f"top 3 holds {stats['top3']}, top 5 holds {stats['top5']}, {stats['num_holders']} "
+              f"holders with an average amount of {stats['avg_amount']}, average without top 5 of {stats['median_amount']}, "
+              f"inserting into DB")
+
+        #db.update_nft_stats(nftId, timestamp, stats['whale_amount'], stats['top3'], stats['top5'], stats['avg_amount'], stats['median_amount'])
+
+        db.insert_nft_stats(nftId, timestamp, stats['average_hold_time'], stats['num_holders'], stats['whale_amount'],
+                            stats['top3'], stats['top5'], stats['avg_amount'], stats['median_amount'])
+
+
+# Returns a dictionary of the accountId's holding the NFT at the given timestamp
 def get_holders_at_time(nftId, timestamp):
     db = nifty.NiftyDB()
     nft = Nft(nftId)
@@ -810,50 +1055,155 @@ def get_holders_at_time(nftId, timestamp):
                                    'amount', 'price', 'priceUsd'])
     df = df[df.createdAt < timestamp]
     holders = dict()
+
     # Go through tx and save holder balances
     for idx, tx in df.iterrows():
         if tx['buyerAccount'] not in holders:
             holders[tx['buyerAccount']] = tx['amount']
         else:
             holders[tx['buyerAccount']] += tx['amount']
-        if tx['sellerAccount'] in holders:
+        if tx['sellerAccount'] not in holders:
+            holders[tx['sellerAccount']] = -1 * tx['amount']
+        else:
             holders[tx['sellerAccount']] -= tx['amount']
 
     # Remove holders with 0 balance
-    holders_purged = {k:v for k,v in holders.items() if v != 0}
-
+    holders_purged = {k: v for k, v in holders.items() if v > 0}
     return holders_purged
 
-def plot_number_of_holders_over_time(nftId):
-    pass
+
+def get_user_average_cost(nftId, accountId, end_timestamp=None):
+    db = nifty.NiftyDB()
+    nft = Nft(nftId)
+    tx = db.get_user_trade_history(accountId, [nft.get_nft_data()])
+    if tx is None:
+        return None
+    df = pd.DataFrame(tx, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount',
+                                              'buyerAccount', 'amount', 'price', 'priceUsd', 'nftData2', 'name',
+                                              'buyer', 'seller'])
+    purchases = df[df.buyerAccount == accountId]
+    sales = df[df.sellerAccount == accountId]
+    if end_timestamp is not None:
+        purchases = purchases[purchases.createdAt <= end_timestamp]
+        sales = sales[sales.createdAt <= end_timestamp]
+
+    # Calculate total purchases
+    total_owned = 0
+    total_purchase_cost = 0
+    total_purchase_cost_usd = 0
+    for idx, tx in purchases.iterrows():
+        total_owned += tx.amount
+        total_purchase_cost += tx.price * tx.amount
+        total_purchase_cost_usd += tx.priceUsd * tx.amount
+
+    # Subtract total sales
+    for idx, tx in sales.iterrows():
+        total_owned -= tx.amount
+        total_purchase_cost -= tx.price * tx.amount
+        total_purchase_cost_usd -= tx.priceUsd * tx.amount
+
+    # Check if they still own any
+    if total_owned == 0:
+        print(f"{accountId} does not own any {nft.get_name()}")
+        return None
+
+    # Calculate average cost
+    average_cost = round(total_purchase_cost / total_owned, 2)
+    average_cost_usd = round(total_purchase_cost_usd / total_owned, 2)
+
+    cost = dict()
+    cost['average_cost'] = average_cost
+    cost['average_cost_usd'] = average_cost_usd
+
+    return cost
 
 
-#get_holders_at_time(CC_CLONE_CARD, 1659560276)
-#print(calculate_nft_average_hold_time(CC_10_WORLDS, 1658614445))
+def plot_holder_stats(nftId, save_file=False):
+    db = nifty.NiftyDB()
+    nft = Nft(nftId)
+    stats = db.get_holder_stats(nftId)
+    df = pd.DataFrame(stats, columns=['nftId', 'timestamp', 'hold_time', 'num_holders', 'whale_amount', 'top3', 'top5',
+                                      'avg_amount', 'median_amount'])
+    df.timestamp = pd.to_datetime(df.timestamp, unit='s')
+    df.set_index('timestamp')
+
+    fig = make_subplots(rows=2, cols=2, start_cell='top-left', subplot_titles=("Number of Holders", "Average Hold Time",
+                                                                                "Whale Holdings", "Average Amount"),
+                        horizontal_spacing=0.1, vertical_spacing=0.1)
+
+    fig.add_trace(go.Scatter(x=df.timestamp, y=df.num_holders, name='Number of Holders', mode='lines+markers'),
+                             row=1, col=1)
+    fig.add_trace(go.Scatter(x=df.timestamp, y=df.hold_time, name='Hold Time', mode='lines+markers'),
+                             row=1, col=2)
+    fig.add_trace(go.Scatter(x=df.timestamp, y=df.whale_amount, name='Top Whale', mode='lines+markers'),
+                             row=2, col=1)
+    fig.add_trace(go.Scatter(x=df.timestamp, y=df.top3, name='Top 3', mode='lines+markers'),
+                             row=2, col=1)
+    fig.add_trace(go.Scatter(x=df.timestamp, y=df.top5, name='Top 5', mode='lines+markers'),
+                             row=2, col=1)
+    fig.add_trace(go.Scatter(x=df.timestamp, y=df.avg_amount, name='Average Amount', mode='lines+markers'),
+                             row=2, col=2)
+    fig.add_trace(go.Scatter(x=df.timestamp, y=df.median_amount, name='Average Minus Top 5', mode='lines+markers'),
+                             row=2, col=2)
+
+    fig.update_layout(title_text=f"<b>{nft.get_name()} Holder Stats - {datetime.now().strftime('%Y-%m-%d')}</b>",
+                      title_x=0.5, template="plotly_dark", titlefont=dict(size=32, color='white'))
+    fig.update_yaxes(title_text="Number of Holders", row=1, col=1)
+    fig.update_yaxes(title_text="Days", row=1, col=2)
+    fig.update_yaxes(title_text="Number Held", range=[0, df['top5'].max()*1.1], row=2, col=1)
+    fig.update_yaxes(title_text="Number Held", range=[0, df['avg_amount'].max()+1], row=2, col=2)
+    fig.show()
+
+    if save_file:
+        folder = f"holder_charts\\{datetime.now().strftime('%Y-%m-%d')}"
+        if not os.path.exists(f"holder_charts\\{datetime.now().strftime('%Y-%m-%d')}"):
+            os.makedirs(f"holder_charts\\{datetime.now().strftime('%Y-%m-%d')}")
+        filename = "".join(x for x in nft.get_name() if (x.isalnum() or x in "._- ")) + '.png'
+
+        fig.write_image(f"{folder}\\{filename}", width=1800, height=1000)
 
 
-#print(get_user_average_hold_time(CC_CLONE_CARD, 'SteamyLeaks'))
-#calculate_nft_average_hold_time(CC_CLONE_CARD)
+def print_users_holdings_report(accountId_list, output_filename=None):
 
-#pull_usernames_from_transactions()
+    date = datetime.now().strftime("%Y-%m-%d")
+    date_and_time = datetime.now().strftime("%Y-%m-%d %H-%M")
+    folder = f"NFT_Owners_Holdings\\{date}"
+    if not os.path.exists(f"{folder}"):
+        os.makedirs(f"{folder}")
 
+    if output_filename is None:
+        output_filename = ""
+    full_filename = f"{folder}\\{date_and_time} {output_filename}.xlsx"
 
-#analyze_cost_basis(CC_CAN_D)
+    with Workbook(full_filename) as workbook:
+        headers = dict({'name': 'NFT Name', 'number_owned': 'Number Owned', 'total_number': 'Total Editions',
+                        'nftId': 'NFT ID'})
+        for accountId in accountId_list:
+            user = User(accountId=accountId, get_nfts=True)
+            info = [['Username', 'Address', 'AccountID'],[user.username, user.address, str(user.accountId)]]
+            if user.username[:2] == '0x':
+                user.username = f"{user.username[:6]}...{user.username[-4:]}"
+            worksheet = workbook.add_worksheet(user.username)
+            bold = workbook.add_format({'bold': True})
+            worksheet.write_column(row=0, col=0, data=info[0], cell_format=bold)
+            worksheet.write_column(row=0, col=1, data=info[1])
+            worksheet.write_row(row=4, col=0, data=headers.values(), cell_format=bold)
+            header_keys = list(headers.keys())
+            for idx, nft in enumerate(user.owned_nfts):
+                row = map(lambda field_id: nft.get(field_id, ''), header_keys)
+                worksheet.write_row(row=idx+5, col=0, data=row)
+            worksheet.set_column(0, 0, 30)
+            worksheet.set_column(1, 1, 15)
+            worksheet.set_column(2, 2, 13)
 
+    print(f"Users Holdings Report saved to {full_filename}")
 
-#plot_trade_tree(CC_CAN_D)
-#plot_collections_cumulative_volume(['f6ff0ed8-277a-4039-9c53-18d66b4c2dac'], save_file=True)
+#for cc in CC_NFTID_LIST:
+#    plot_holder_stats(cc, save_file=True)
 
-#grab_new_blocks()
+#nf = nifty.NiftyDB()
+#print(nf.get_user_trade_history(173768, nftData_List=['0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf']))
 
-#dump_nft_holders()
+#lr = loopring.LoopringAPI()
+#print(lr.filter_nft_txs(24419))
 
-#find_complete_collection_owners()
-# Clone Center
-#plot_collection_price_history("5ca146e6-01b2-45ad-8186-df8b2fd6a713")
-
-# Cyber Crew
-#plot_collection_price_history("f6ff0ed8-277a-4039-9c53-18d66b4c2dac")
-
-
-#dump_nft_holders()
