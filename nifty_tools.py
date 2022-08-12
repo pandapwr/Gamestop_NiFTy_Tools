@@ -240,7 +240,6 @@ def grab_new_blocks(find_missing=False, find_new_users=True):
         except KeyError:
             print(f"Block {last_block + i} not found, database is up to date.")
             break
-
     if find_new_users:
         print("Looking for new users...")
         pull_usernames_from_transactions(blockId=last_block)
@@ -1207,5 +1206,3 @@ def print_users_holdings_report(accountId_list, output_filename=None):
 
 #lr = loopring.LoopringAPI()
 #print(lr.filter_nft_txs(24419))
-
-grab_new_blocks(find_new_users=False)
