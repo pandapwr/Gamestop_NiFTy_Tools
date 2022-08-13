@@ -286,8 +286,10 @@ def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=Fa
     if plot_floor_price:
         fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price, name='Floor Price', ))
         fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price_usd, name='Floor Price USD', yaxis="y2"))
+
+    volume = df.resample('30min', on='createdAt').amount.sum().to_frame()
     fig.add_trace(
-        go.Histogram(x=df.createdAt, name='Volume', texttemplate="%{value}", opacity=0.4, textangle=0, yaxis="y3"))
+        go.Bar(x=volume.index, y=volume.amount, name='Volume', texttemplate="%{value}", opacity=0.4, textangle=0, yaxis="y3"))
 
     fig.update_layout(xaxis=dict(domain=[0, 0.95]), yaxis=dict(title="Price", side="right", position=0.95),
                       yaxis2=dict(title="Price USD", overlaying="y", side="right", position=1),
@@ -1346,3 +1348,10 @@ def shorten_address(address):
     return f"{address[2:6]}...{address[-4:]}"
 
 
+#nf = nifty.NiftyDB()
+#print(nf.get_user_trade_history(173768, nftData_List=['0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf']))
+
+#lr = loopring.LoopringAPI()
+#print(lr.filter_nft_txs(24419))
+# dump_nft_holders([CC_FACTORY])
+plot_price_history(CC_FACTORY)
