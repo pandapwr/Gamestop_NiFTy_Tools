@@ -6,6 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 from plotly.subplots import make_subplots
+import matplotlib.pyplot as plt
 from PIL import Image
 import networkx as nx
 from concurrent.futures import ThreadPoolExecutor
@@ -240,6 +241,7 @@ def grab_new_blocks(find_missing=False, find_new_users=True):
         except KeyError:
             print(f"Block {last_block + i} not found, database is up to date.")
             break
+
     if find_new_users:
         print("Looking for new users...")
         pull_usernames_from_transactions(blockId=last_block)
@@ -284,10 +286,8 @@ def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=Fa
     if plot_floor_price:
         fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price, name='Floor Price', ))
         fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price_usd, name='Floor Price USD', yaxis="y2"))
-
-    volume = df.resample('30min', on='createdAt').amount.sum().to_frame()
     fig.add_trace(
-        go.Bar(x=volume.index, y=volume.amount, name='Volume', texttemplate="%{value}", opacity=0.4, textangle=0, yaxis="y3"))
+        go.Histogram(x=df.createdAt, name='Volume', texttemplate="%{value}", opacity=0.4, textangle=0, yaxis="y3"))
 
     fig.update_layout(xaxis=dict(domain=[0, 0.95]), yaxis=dict(title="Price", side="right", position=0.95),
                       yaxis2=dict(title="Price USD", overlaying="y", side="right", position=1),
@@ -313,7 +313,26 @@ def plot_collection_price_history(collection_id):
     for nft in nfts:
         plot_price_history(nft['nftId'], save_file=True)
 
+def find_complete_plsty_owners():
+    PLSTY_NFTDATA = ["0x158d8f800054785b08a629c8df0e25c8218b0fb72aadda6f7ee158598b8a82ce",
+                     "0x09dec41f15883293afe0cce5167a6e47cdf3965d350e476c4a9e834afee31459",
+                     "0x2703bd802356953d2759be8a22a973b034eae9646b971c672b9c7649f9734fac",
+                     "0x045f0ed1a09bb89e80e2200a2ac3b65592e000c287a2b7c4adb91161ca043ba1",
+                     "0x0abeb97dbdfd3b3fc842fa43a6c9619f10ad6510fbbcd0e91e7425733e3296d9"]
+    lr = loopring.LoopringAPI()
+    _, owners = lr.get_nft_holders("0x0abeb97dbdfd3b3fc842fa43a6c9619f10ad6510fbbcd0e91e7425733e3296d9")
+    num_complete_owners = 0
+    for owner in owners:
+        owned = User(owner['user']).get_owned_nfts_lr()
+        num_owned = 0
+        for nft in owned:
+            if any(nft['nftData'] == x for x in PLSTY_NFTDATA):
+                num_owned += 1
 
+        if num_owned == 5:
+            num_complete_owners += 1
+            print(f"{owner['user']} owns {num_owned}/5 PLS&TY")
+    print(f"Total Number of Complete PLS&TY Owners: {num_complete_owners}")
 def find_complete_collection_owners():
     CC_NFTDATA = ["0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01",
                   "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724",
@@ -660,6 +679,129 @@ def analyze_latest_orderbook(nftId, next_goal, use_live_data=False, collection="
 
     print("\n\n")
 
+
+def plot_transfers_tree(nftId_list):
+    nf = nifty.NiftyDB()
+    dfs = []
+    for nftId in nftId_list:
+        trade_data = nf.get_nft_trade_history(nftId)
+        new_df = pd.DataFrame(trade_data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
+                                               'amount', 'price', 'priceUsd', 'seller', 'buyer'])
+        new_df = new_df[new_df['txType'] == 'Transfer']
+        dfs.append(new_df)
+    df = pd.concat(dfs)
+
+    for idx, row in df.iterrows():
+        if len(row['seller']) > 30:
+            df.at[idx, 'seller'] = shorten_address(row['seller'])
+        if len(row['buyer']) > 30:
+            df.at[idx, 'buyer'] = shorten_address(row['buyer'])
+
+    df['weight'] = df.groupby(['buyer', 'seller'])['buyer'].transform('size')
+    df = df[df['weight'] > 3]
+
+
+    G = nx.from_pandas_edgelist(df, 'buyer', 'seller',
+                                create_using=nx.DiGraph(), edge_attr='weight')
+    print(G.edges(data=True))
+    for edge in G.edges(data=True):
+        print(edge[2]['weight'])
+    '''
+    print(G.edges(data=True))
+    print(G.nodes())
+
+    print(G.nodes)
+
+
+
+    elarge = [(u, v) for (u, v, d) in G.edges(data=True) if d["weight"] > 3]
+    esmall = [(u, v) for (u, v, d) in G.edges(data=True) if d["weight"] <= 3]
+    pos = nx.spring_layout(G, seed=7)  # positions for all nodes - seed for reproducibility
+
+    for node in G.nodes():
+        G._node[node]['pos'] = pos[node]
+    # nodes
+    nx.draw_networkx_nodes(G, pos, node_size=700)
+
+    # edges
+    nx.draw_networkx_edges(G, pos, edgelist=elarge, width=6)
+    nx.draw_networkx_edges(
+        G, pos, edgelist=esmall, width=6, alpha=0.5, edge_color="b", style="dashed"
+    )
+
+    # node labels
+    nx.draw_networkx_labels(G, pos, font_size=20, font_family="sans-serif")
+    # edge weight labels
+    edge_labels = nx.get_edge_attributes(G, "weight")
+    nx.draw_networkx_edge_labels(G, pos, edge_labels)
+
+    edge_x = []
+    edge_y = []
+    for edge in G.edges():
+        x0, y0 = G.nodes[edge[0]]['pos']
+        x1, y1 = G.nodes[edge[1]]['pos']
+        edge_x.append(x0)
+        edge_x.append(x1)
+        edge_x.append(None)
+        edge_y.append(y0)
+        edge_y.append(y1)
+        edge_y.append(None)
+
+    edge_trace = go.Scatter(
+        x=edge_x, y=edge_y,
+        line=dict(width=0.5, color='#888'),
+        hoverinfo='none',
+        mode='lines')
+
+    node_x = []
+    node_y = []
+    for node in G.nodes():
+        x, y = G.nodes[node]['pos']
+        node_x.append(x)
+        node_y.append(y)
+
+    node_trace = go.Scatter(
+        x=node_x, y=node_y,
+        mode='markers',
+        hoverinfo='text',
+        marker=dict(
+            showscale=True,
+            # colorscale options
+            # 'Greys' | 'YlGnBu' | 'Greens' | 'YlOrRd' | 'Bluered' | 'RdBu' |
+            # 'Reds' | 'Blues' | 'Picnic' | 'Rainbow' | 'Portland' | 'Jet' |
+            # 'Hot' | 'Blackbody' | 'Earth' | 'Electric' | 'Viridis' |
+            colorscale='YlGnBu',
+            reversescale=True,
+            color=[],
+            size=10,
+            colorbar=dict(
+                thickness=15,
+                title='Node Connections',
+                xanchor='left',
+                titleside='right'
+            ),
+            line_width=2))
+
+
+    # noinspection PyTypeChecker
+    fig = go.Figure(data=[edge_trace, node_trace],
+                    layout=go.Layout(
+                        title='<br>Network graph made with Python',
+                        titlefont_size=16,
+                        showlegend=False,
+                        hovermode='closest',
+                        margin=dict(b=20, l=5, r=5, t=40),
+                        annotations=[dict(
+                            text=f"Account Transfers Graph for CC",
+                            showarrow=False,
+                            xref="paper", yref="paper",
+                            x=0.005, y=-0.002)],
+                        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
+                    )
+    fig.show()
+
+    '''
 
 def plot_trade_tree(nftId):
     nf = nifty.NiftyDB()
@@ -1200,13 +1342,7 @@ def print_users_holdings_report(accountId_list, output_filename=None):
 
     print(f"Users Holdings Report saved to {full_filename}")
 
-#for cc in CC_NFTID_LIST:
-#    plot_holder_stats(cc, save_file=True)
+def shorten_address(address):
+    return f"{address[2:6]}...{address[-4:]}"
 
-#nf = nifty.NiftyDB()
-#print(nf.get_user_trade_history(173768, nftData_List=['0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf']))
 
-#lr = loopring.LoopringAPI()
-#print(lr.filter_nft_txs(24419))
-# dump_nft_holders([CC_FACTORY])
-plot_price_history(CC_FACTORY)
