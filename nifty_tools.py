@@ -248,7 +248,21 @@ def grab_new_blocks(find_missing=False, find_new_users=True):
 
 
 # Plot price history using pandas
-def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=False):
+def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=False, limit_volume=True):
+    """
+    Plots the price history of a given NFT
+    Parameters
+    ----------
+    nft_id - Id for the file to be plotted
+    save_file - If true - Saves the plot to .\price_history_charts\todays_date\
+    bg_img - Image to be used as a background for the chart
+    plot_floor_price - Add a line for floor price
+    limit_volume - limits the volume histogram to the 99 percentile, because of volume spikes @ mint
+
+    Returns - None
+    -------
+
+    """
     nf = nifty.NiftyDB()
     nft_data = nf.get_nft_data(nft_id)
     data = nf.get_nft_trade_history(nft_id)
@@ -288,6 +302,9 @@ def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=Fa
         fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price_usd, name='Floor Price USD', yaxis="y2"))
 
     volume = df.resample('30min', on='createdAt').amount.sum().to_frame()
+    if limit_volume:
+        limit = (round(np.percentile(volume.amount, 99)/10)*10)
+        volume.loc[volume['amount'] > limit, 'amount'] = limit
     fig.add_trace(
         go.Bar(x=volume.index, y=volume.amount, name='Volume', texttemplate="%{value}", opacity=0.4, textangle=0, yaxis="y3"))
 
@@ -1347,11 +1364,13 @@ def print_users_holdings_report(accountId_list, output_filename=None):
 def shorten_address(address):
     return f"{address[2:6]}...{address[-4:]}"
 
+if __name__ == "__main__":
+    #nf = nifty.NiftyDB()
+    #print(nf.get_user_trade_history(173768, nftData_List=['0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf']))
 
-#nf = nifty.NiftyDB()
-#print(nf.get_user_trade_history(173768, nftData_List=['0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf']))
+    #lr = loopring.LoopringAPI()
+    #print(lr.filter_nft_txs(24419))
 
-#lr = loopring.LoopringAPI()
-#print(lr.filter_nft_txs(24419))
-# dump_nft_holders([CC_FACTORY])
-plot_price_history(CC_FACTORY)
+    grab_new_blocks(find_new_users=False)
+    plot_price_history(CC_RED_CUPCAKE, limit_volume=False)
+    plot_price_history(CC_RED_CUPCAKE, limit_volume=True)
