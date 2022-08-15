@@ -20,16 +20,11 @@ class LoopringAPI:
 
     def get_num_nft_holders(self, nftData):
         total_num = 0
-        offset = 0
 
-        while True:
-            api_url = f"https://api3.loopring.io/api/v3/nft/info/nftHolders?nftData={nftData}&offset={offset}&limit=500"
-            response = self.lr.get(api_url).json()
-            if response['totalNum'] == 0:
-                break
-            else:
-                total_num = response['totalNum']
-            offset += 500
+        api_url = f"https://api3.loopring.io/api/v3/nft/info/nftHolders?nftData={nftData}&limit=500"
+        response = self.lr.get(api_url).json()
+        total_num = response['totalNum']
+
         return total_num
 
     def get_nft_holders(self, nftData):
