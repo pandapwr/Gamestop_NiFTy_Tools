@@ -3,15 +3,8 @@ from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime
 import time
 import nifty_tools as nifty
+from nft_ids import *
 
-
-MB_MONKEY = "dac8c208-e386-4b1f-8003-b43dbde3dc3f"
-MB_FROGGI = "7b75e90b-47e0-4b38-8dfc-61feab3a9429"
-MB_ASTRONAUT = "47400769-a0e8-4763-8f42-82e3566ff512"
-MB_ROCKSTAR = "b0d4b56d-86cf-41af-ae4e-1689f1681c1b"
-MB_REPORTER = "0755529b-60a1-4432-a129-8079bd83868d"
-MB_ADAM = "64af3bd4-f0e7-4cce-b05f-cd2a438644b2"
-MB_LIST = [MB_MONKEY, MB_FROGGI, MB_ASTRONAUT, MB_ROCKSTAR, MB_REPORTER, MB_ADAM]
 
 scheduler = BackgroundScheduler(daemon=True)
 
@@ -35,6 +28,15 @@ def mb_honarary_scraper():
     nifty.dump_nft_holders(MB_LIST, "Metaboy Honorary Owners List")
     print(f"\n\n[{datetime.now()}] Scraping MB Honarary... done\n\n")
 
+def save_holder_stats_task():
+    print(f"\n\n[{datetime.now()}] Calculating Holder Stats...\n\n")
+    nifty.save_holder_stats(CC_LIST)
+    nifty.save_holder_stats(CC_CELEBRATION_LIST)
+    nifty.save_holder_stats(MB_LIST)
+    nifty.save_holder_stats(PLS_LIST)
+    nifty.save_holder_stats(ENG_LIST)
+    print(f"\n\n[{datetime.now()}] Calculating Holder Stats... done\n\n")
+
 
 # Check for block data every 5 minutes
 scheduler.add_job(block_scraper, 'interval', minutes=5)
@@ -44,6 +46,8 @@ scheduler.add_job(block_scraper, 'interval', minutes=5)
 
 # Scrape Discord server stats every 10 minutes
 scheduler.add_job(discord_scraper, 'interval', minutes=10)
+
+scheduler.add_job(save_holder_stats_task, 'interval', minutes=180)
 
 # Dump MB Honorary data every
 trigger = CronTrigger(year="*", month="*", day="*", hour="14", minute="0", second="0")

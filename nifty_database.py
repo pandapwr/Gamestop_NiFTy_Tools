@@ -56,6 +56,11 @@ class NiftyDB:
                                                                               whale_amount, top3, top5, avg_amount, median_amount))
         self.conn.commit()
 
+    def insert_collection_stats(self, collectionId, timestamp, volume, volume_usd, unique_holders):
+        self.c.execute("INSERT INTO collection_stats VALUES (?, ?, ?, ?, ?)", (collectionId, timestamp, volume,
+                                                                               volume_usd, unique_holders))
+        self.conn.commit()
+
     def update_nft_stats(self, nftId, timestamp, whale_amount, top3, top5, avg_amount, median_amount):
         query = f"UPDATE nft_stats SET median_amount='{median_amount}', whale_amount='{whale_amount}', top3='{top3}', " \
                 f"top5='{top5}', avg_amount='{avg_amount}' WHERE nftId='{nftId}' AND timestamp='{timestamp}'"
@@ -63,7 +68,7 @@ class NiftyDB:
         self.conn.commit()
 
     def insert_transaction(self, blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd):
-        print("Inserting: ", blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd)
+        #print("Inserting: ", blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd)
         self.c.execute("INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                        (blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd))
         self.conn.commit()
@@ -255,12 +260,30 @@ class NiftyDB:
 
     def get_nft_collection_tx(self, collectionId):
         # Returns blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd, nftData2, collectionId
-        query = ("SELECT tx.*, nfts.nftData AS nftData2, nfts.collectionId FROM transactions AS tx "
+        query = ("SELECT tx.*, nfts.nftId, nfts.name FROM transactions AS tx "
                  "INNER JOIN nfts ON nfts.nftData = tx.nftData "
                  f"WHERE nfts.collectionId='{collectionId}' "
                  "ORDER BY tx.blockId")
         self.c.execute(query)
         result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
+
+    def get_nft_price_at_time(self, nftId, timestamp):
+        query = f"SELECT * FROM nfts WHERE nftId='{nftId}' AND createdAt <= {timestamp} ORDER BY createdAt DESC"
+        self.c.execute(query)
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result['price']
+
+    def get_collection_info(self, collectionId):
+        query = f"SELECT * FROM collections WHERE collectionId='{collectionId}'"
+        self.c.execute(query)
+        result = self.c.fetchone()
         if result is None:
             return None
         else:
@@ -306,34 +329,20 @@ class NiftyDB:
         else:
             return users
 
+    def get_last_collection_stats_timestamp(self, collectionId):
+        query = f"SELECT MAX(timestamp) AS timestamp FROM collection_stats WHERE collectionId='{collectionId}'"
+        self.c.execute(query)
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result['timestamp']
+
     def update_username(self, accountId, username):
         query = f"UPDATE users SET username='{username}' WHERE accountId='{accountId}'"
         self.c.execute(query)
         self.conn.commit()
 
-
-
-        '''
-        # First, get the available snapshot times
-        query = f"SELECT cc.nftId, cc.snapshotTime from cybercrew_orders AS cc GROUP BY snapshotTime ORDER BY snapshotTime"
-        self.c.execute(query)
-        snapshotTimes = self.c.fetchall()
-
-        orderbook = []
-        # Retrieve order data for each snapshot time
-        for snapshot in snapshotTimes:
-            orders = dict()
-            query = f"SELECT cc.nftId, cc.amount, cc.fulfilledAmount, cc.price from cybercrew_orders AS cc " \
-                    f"WHERE nftId='{nftId}' AND snapshotTime='{snapshot['snapshotTime']}'"
-            self.c.execute(query)
-            snapshotData = self.c.fetchall()
-            for order in snapshotData:
-                orders[order['price']] = order
-            orderbook.append(orders)
-            for
-            orders['snapshotTime'] = snapshot['snapshotTime']
-            orders['orders'] = snapshotData
-        '''
 
 
 

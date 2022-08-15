@@ -61,7 +61,7 @@ class LoopringAPI:
 
                 futures = [executor.submit(check_db_for_user_info, holder['accountId'], holder['amount']) for holder in holders]
                 for future in as_completed(futures):
-                    print(f"{index+1}/{total_holders}: {future.result()['user']} owns {future.result()['amount']}")
+                    print(f"{index+1}/{total_holders}: {future.result()['user']} ({future.result()['accountId']}) owns {future.result()['amount']}")
                     index += 1
                     holders_list.append({'user': future.result()['user'], 'accountId': future.result()['accountId'],
                                          'amount': future.result()['amount'], 'address': future.result()['address']})
@@ -152,8 +152,9 @@ class LoopringAPI:
 
     def save_nft_tx(self, blockData):
         db = nifty.NiftyDB()
-        block_price = db.get_historical_price('ETH', int(blockData['createdAt']/1000))
-        print(f"Block {blockData['blockId']} price: ${block_price}")
+        block_price_eth = db.get_historical_price('ETH', int(blockData['createdAt']/1000))
+        block_price_lrc = db.get_historical_price('LRC', int(blockData['createdAt']/1000))
+        print(f"Block {blockData['blockId']} price: ${block_price_eth}")
 
         # Check to see if block already exists in database
         if db.check_if_block_exists(blockData['blockId']) is True:
@@ -162,10 +163,17 @@ class LoopringAPI:
             created = int(blockData['createdAt'] / 1000)
             for tx in blockData['transactions']:
                 if tx['txType'] == 'SpotTrade':
-                    price = float(tx['orderA']['amountS']) / 10 ** 18 / float(tx['orderA']['amountB'])
+                    # Check to see if transaction was done using LRC
+                    if tx['orderA']['tokenS'] == 1:
+                        price_lrc = float(tx['orderA']['amountS']) / 10 ** 18 / float(tx['orderA']['amountB'])
+                        price_usd = round(price_lrc * block_price_lrc, 2)
+                        price_eth = round(price_usd / block_price_eth, 4)
+                    else:
+                        price_eth = float(tx['orderA']['amountS']) / 10 ** 18 / float(tx['orderA']['amountB'])
+                        price_usd = round(price_eth*block_price_eth, 2)
                     db.insert_transaction(blockData['blockId'], created, tx['txType'],
                                           tx['orderA']['nftData'], tx['orderB']['accountID'], tx['orderA']['accountID'],
-                                          tx['orderB']['fillS'], price, round(price*block_price,2))
+                                          tx['orderB']['fillS'], price_eth, price_usd)
                 elif tx['txType'] == 'Transfer':
                     db.insert_transaction(blockData['blockId'], created, tx['txType'],
                                           tx['token']['nftData'], tx['accountId'], tx['toAccountId'],

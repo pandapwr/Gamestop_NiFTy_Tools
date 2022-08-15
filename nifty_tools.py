@@ -1,12 +1,10 @@
 import csv
 from datetime import datetime
 import os
-import statistics
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 from plotly.subplots import make_subplots
-import matplotlib.pyplot as plt
 from PIL import Image
 import networkx as nx
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +13,7 @@ import loopring_api as loopring
 import discord_api as discord
 from gamestop_api import User, Nft, NftCollection, GamestopApi
 from coinbase_api import CoinbaseAPI
+from nft_ids import *
 
 import nifty_database as nifty
 
@@ -27,7 +26,7 @@ CC_10_WORLDS = "d43ed539-1ba8-40ac-a05e-da566f0d1cc9"
 CC_CYBER_CYCLE = "91994321-dcaf-44e6-88df-2f6dad3df801"
 CC_LOADING_LEVEL = "bb2199e0-c614-460c-ba95-54593eb8caff"
 CC_CLONE_CENTER = "15a15703-a3ed-4768-8d7a-5931025294ed"
-CC_CLONEBOT_STICKER = "b67b2a29-5931-4610-a157-607877340ea2"
+
 
 CC_RED_CUPCAKE = "0x1d608bd077b05370d534e76d694b256c52ae8e53b36f2aa6110945a52243b011"
 CC_MILK = "0x07bf8d4ec2aeb66b3df9535e0c5cff1510e07440dfbb5228e7b3ef07fbf8a37b"
@@ -106,7 +105,7 @@ def save_nft_holders(nft_id=None, nftData=None):
 
         holders_sorted = sorted(nft_holders, key=lambda d: int(d['amount']), reverse=True)
 
-        number_of_holders_for_cost_basis = 10
+        number_of_holders_for_cost_basis = 0
         for i in range(number_of_holders_for_cost_basis):
             if nftData is None:
                 cost_basis = get_user_average_cost(nft_id, holders_sorted[i]['accountId'])
@@ -200,6 +199,8 @@ def dump_nft_holders(nftId_list=None, output_filename=None):
 def update_historical_crypto_data(currency):
     nf = nifty.NiftyDB()
     last_price_timestamp = nf.get_last_historical_price_data(currency)
+    if last_price_timestamp is None:
+        last_price_timestamp = 1640995200
     last_price_timestamp = datetime.utcfromtimestamp(last_price_timestamp).strftime('%Y-%m-%d-%H-%M')
     data = get_historical_crypto_data(currency, last_price_timestamp)
     nf.insert_historical_price_data(currency, data[1:])
@@ -218,6 +219,7 @@ def print_trade_history(nft_id):
 
 def grab_new_blocks(find_missing=False, find_new_users=True):
     update_historical_crypto_data('ETH')
+    update_historical_crypto_data('LRC')
     lr = loopring.LoopringAPI()
     nf = nifty.NiftyDB()
     last_block = nf.get_latest_saved_block()
@@ -341,17 +343,25 @@ def find_complete_plsty_owners():
     lr = loopring.LoopringAPI()
     _, owners = lr.get_nft_holders("0x0abeb97dbdfd3b3fc842fa43a6c9619f10ad6510fbbcd0e91e7425733e3296d9")
     num_complete_owners = 0
+    num_backstage = 0
     for owner in owners:
         owned = User(owner['user']).get_owned_nfts_lr()
         num_owned = 0
+        still_owned = 0
         for nft in owned:
+            if nft['nftData'] == "0x045f0ed1a09bb89e80e2200a2ac3b65592e000c287a2b7c4adb91161ca043ba1":
+                still_owned = 1
             if any(nft['nftData'] == x for x in PLSTY_NFTDATA):
                 num_owned += 1
-
+        if still_owned >= 1 and num_owned >= 3:
+            num_backstage += 1
         if num_owned == 5:
             num_complete_owners += 1
             print(f"{owner['user']} owns {num_owned}/5 PLS&TY")
     print(f"Total Number of Complete PLS&TY Owners: {num_complete_owners}")
+    print(f"Total Number of Backstage Passes (3/5 or more): {num_backstage}")
+
+
 def find_complete_collection_owners():
     CC_NFTDATA = ["0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01",
                   "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724",
@@ -552,14 +562,14 @@ def plot_user_transaction_history(user_id):
     fig.show()
 
 
-def plot_collections_cumulative_volume(collectionId_list, start_date=None, save_file=False):
+def plot_collections_stats(collectionId_list, start_date=None, save_file=False):
     nf = nifty.NiftyDB()
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     for collection in collectionId_list:
         data = nf.get_nft_collection_tx(collection)
         # Returns blockId, createdAt, txType, nftData, sellerAccount, buyerAccount, amount, price, priceUsd, nftData2, collectionId
         df = pd.DataFrame(data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
-                                         'amount', 'price', 'priceUsd', 'nftData2', 'collectionId'])
+                                         'amount', 'price', 'priceUsd', 'nftId', 'nftName'])
         df.createdAt = pd.to_datetime(df.createdAt, unit='s')
         df.set_index('createdAt')
         df['volume'] = df['amount'] * df['price']
@@ -1363,6 +1373,69 @@ def print_users_holdings_report(accountId_list, output_filename=None):
 
 def shorten_address(address):
     return f"{address[2:6]}...{address[-4:]}"
+
+def get_number_unique_holders(nftId_list):
+    lr = loopring.LoopringAPI()
+    unique_holders = []
+    for nftId in nftId_list:
+        nft = Nft(nftId)
+        _, holders_list = lr.get_nft_holders(nft.get_nft_data())
+        for holder in holders_list:
+            if holder['accountId'] not in unique_holders:
+                unique_holders.append(holder['accountId'])
+    print(f"{len(unique_holders)} unique holders")
+
+def save_collection_stats(collectionId):
+    nf = nifty.NiftyDB()
+    collection = nf.get_collection_info(collectionId)
+    nftId_list = collection['nftIds'].split(',')
+
+    collection_tx = nf.get_nft_collection_tx(collectionId)
+    tx_df = pd.DataFrame(collection_tx, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
+                                                 'amount', 'price', 'priceUsd', 'nftId', 'nftName'])
+
+    start_time = nf.get_last_collection_stats_timestamp(collectionId)
+    start = int(datetime.strptime("2022-01-01-00-00Z", "%Y-%m-%d-%H-%M%z").timestamp())
+    if start_time is not None:
+        start_timestamp = start_time + 86400
+    else:
+        first_sale = tx_df[(tx_df['txType'] == 'SpotTrade')].sort_values(by=['blockId']).iloc[0]['createdAt']
+        start_timestamp = range(start, first_sale + 86401, 86400)[-1]
+
+    end_timestamp = range(start, int(datetime.now().timestamp()), 86400)[-1]
+
+    time_list = range(start_timestamp, end_timestamp, 86400)
+    if len(time_list) == 0:
+        print("Collection stats up to date")
+        return
+    else:
+        for time in time_list:
+            tx_df_time = tx_df[tx_df['createdAt'] <= time].sort_values(by=['blockId'])
+
+            # Calculate volume
+            tx_df_time['volume'] = tx_df_time['amount'] * tx_df_time['price']
+            tx_df_time['volumeUsd'] = tx_df_time['amount'] * tx_df_time['priceUsd']
+            volume_eth = round(tx_df_time['volume'].sum(), 4)
+            volume_usd = round(tx_df_time['volumeUsd'].sum(), 2)
+
+            # Calculate number of unique holders
+            holders_list = []
+            for nftId in nftId_list:
+                nft_holders = get_holders_at_time(nftId, time)
+                for holder in nft_holders:
+                    if holder not in holders_list:
+                        holders_list.append(holder)
+            print(f"{datetime.fromtimestamp(time).strftime('%Y-%m-%d')}: {volume_eth} ETH, ${volume_usd} USD",
+                  f"{len(holders_list)} unique holders")
+
+            nf.insert_collection_stats(collectionId, time, volume_eth, volume_usd, len(holders_list))
+
+
+
+def find_single_or_multiple_holder_sellers():
+    pass
+
+
 
 def plot_items_per_wallet(NFT_list):
     """
