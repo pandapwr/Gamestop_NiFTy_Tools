@@ -1364,6 +1364,46 @@ def print_users_holdings_report(accountId_list, output_filename=None):
 def shorten_address(address):
     return f"{address[2:6]}...{address[-4:]}"
 
+def plot_items_per_wallet(NFT_list):
+    """
+    A function to plot a bar chart with average NFT per wallet
+    Parameters
+    ----------
+    NFT_list = List of nft_id's
+
+    Returns
+    -------
+
+    """
+    db = nifty.NiftyDB()
+    lr = loopring.LoopringAPI()
+    stats = []
+    for nft_id in NFT_list:
+        nft = Nft(nft_id)
+        name = nft.data['name']
+        # TODO: THIS IS SLOW, CONVERT TO A DB READING?
+        holders = lr.get_num_nft_holders(nft.data['nftData'])
+        # Fast from here and out
+        amount = nft.data['amount']
+
+
+        stats.append([name,amount/holders])
+    df = pd.DataFrame(stats, columns=['Name', 'Items per wallet'])
+    df.sort_values(by=['Items per wallet'], inplace=True)
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Bar(x=df.Name, y=df["Items per wallet"], name='Volume', texttemplate="%{value}", textangle=0))
+    fig.update_layout(title_text=f"NFT's per wallet",title_x=0.5, template="plotly_dark")
+    fig.update_xaxes(title_text="NFT")
+    fig.update_yaxes(title_text="Per wallet")
+    fig.show()
+
+
+
+
+
 if __name__ == "__main__":
     #nf = nifty.NiftyDB()
     #print(nf.get_user_trade_history(173768, nftData_List=['0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf']))
@@ -1372,5 +1412,9 @@ if __name__ == "__main__":
     #print(lr.filter_nft_txs(24419))
 
     grab_new_blocks(find_new_users=False)
-    plot_price_history(CC_RED_CUPCAKE, limit_volume=False)
-    plot_price_history(CC_RED_CUPCAKE, limit_volume=True)
+    # plot_price_history(CC_RED_CUPCAKE, limit_volume=True)
+    # print_users_holdings_report([174783])
+    nfts = [CC_FACTORY,CC_MILK, CC_RED_CUPCAKE,CC_ORANGE_CUPCAKE,CC_BLUE_CUPCAKE, CC_CLONE, CC_CLONE_CARD, CC_CAN_D, CC_CYBER_CYCLE, CC_CHROME_CANNON]
+    # for n in nfts:
+    #      plot_price_history(n, limit_volume=True)
+    plot_items_per_wallet(nfts)
