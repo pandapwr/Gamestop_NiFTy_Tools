@@ -304,7 +304,7 @@ def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=Fa
         fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price_usd, name='Floor Price USD', yaxis="y2"))
 
     volume = df.resample('30min', on='createdAt').amount.sum().to_frame()
-    if limit_volume:
+    if limit_volume and volume.amount.max() > 40:
         limit = (round(np.percentile(volume.amount, 99)/10)*10)
         volume.loc[volume['amount'] > limit, 'amount'] = limit
     fig.add_trace(
@@ -1478,16 +1478,7 @@ def plot_items_per_wallet(NFT_list):
 
 
 if __name__ == "__main__":
-    #nf = nifty.NiftyDB()
-    #print(nf.get_user_trade_history(173768, nftData_List=['0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf']))
+    grab_new_blocks()
+    # for nft in CC_LIST:
+    #       plot_price_history(nft, limit_volume=True)
 
-    #lr = loopring.LoopringAPI()
-    #print(lr.filter_nft_txs(24419))
-
-    grab_new_blocks(find_new_users=False)
-    # plot_price_history(CC_RED_CUPCAKE, limit_volume=True)
-    # print_users_holdings_report([174783])
-    nfts = [CC_FACTORY,CC_MILK, CC_RED_CUPCAKE,CC_ORANGE_CUPCAKE,CC_BLUE_CUPCAKE, CC_CLONE, CC_CLONE_CARD, CC_CAN_D, CC_CYBER_CYCLE, CC_CHROME_CANNON]
-    # for n in nfts:
-    #      plot_price_history(n, limit_volume=True)
-    plot_items_per_wallet(nfts)
