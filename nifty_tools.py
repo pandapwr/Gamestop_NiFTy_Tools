@@ -82,7 +82,6 @@ def save_nft_holders(nft_id=None, nftData=None):
                    ''.join(x for x in nft.get_name() if (x.isalnum() or x in "._- ")) + '.csv'
         print(f"Writing to {filename}")
         total_holders, nft_holders = lr.get_nft_holders(nft.data['nftData'])
-        print(nft_holders)
         nft_name = nft.get_name()
         nftId = nft.get_nftId()
     else:
@@ -115,7 +114,6 @@ def save_nft_holders(nft_id=None, nftData=None):
             holders_sorted[i]['cost_basis_usd'] = cost_basis['average_cost_usd']
 
         for idx, holder in enumerate(holders_sorted):
-            print(holder)
             if idx < number_of_holders_for_cost_basis:
                 writer.writerow([holder['user'], holder['amount'], holder['address'], holder['accountId'], holder['cost_basis'], holder['cost_basis_usd']])
             else:
@@ -1473,12 +1471,127 @@ def plot_items_per_wallet(NFT_list):
     fig.update_yaxes(title_text="Per wallet")
     fig.show()
 
+def print_user_collection_ownership(nftId_list):
+    nf = nifty.NiftyDB()
+    lr = loopring.LoopringAPI()
+    owners_dict = {}
+
+    for nftId in nftId_list:
+        print("looking up nftId:", nftId)
+        nft = Nft(nftId)
+        _, nft_owners = lr.get_nft_holders(nft.get_nft_data())
+        for owner in nft_owners:
+            nft_dict = dict()
+            nft_dict['nftId'] = nftId
+            nft_dict['nftName'] = nft.data['name']
+            nft_dict['amount'] = owner['amount']
+            nft_dict['ownerName'] = owner['user']
+            nft_dict['accountId'] = owner['accountId']
+            dict_copy = nft_dict.copy()
+
+            if owner['address'] not in owners_dict:
+                owners_dict[owner['address']] = [dict_copy]
+            else:
+
+                owners_dict[owner['address']].append(dict_copy)
+
+    print(owners_dict)
+
+    for owner in owners_dict:
+        owner_string = f"{owner} ({owners_dict[owner][0]['ownerName']}): "
+        num_still = 0
+        num_pd1 = 0
+        num_pd2 = 0
+        num_pd3 = 0
+        num_se = 0
+        num_complete_sets = 0
+
+        for nft in owners_dict[owner]:
+            if nft['nftId'] == PLS_PURPLE_DREAM:
+                num_pd1 += int(nft['amount'])
+            elif nft['nftId'] == PLS_PURPLE_DREAM_2:
+                num_pd2 += int(nft['amount'])
+            elif nft['nftId'] == PLS_PURPLE_DREAM_3:
+                num_pd3 += int(nft['amount'])
+            elif nft['nftId'] == PLS_PURPLE_DREAM_STILL:
+                num_still += int(nft['amount'])
+            elif nft['nftId'] == PLS_SPECIAL:
+                num_se += int(nft['amount'])
+
+
+        num_still_se = min([num_still, num_se])
+        num_pd13 = min([num_pd1, num_pd2, num_pd3])
+
+        num_3of5 = min([num_still_se, num_pd13])
+        num_complete_sets = min([num_pd1, num_pd2, num_pd3, num_still, num_se])
+
+        owner_string += f"{num_3of5}x 3/5, {num_complete_sets}x 5/5 \t"
+        owner_string += f"{num_still}x Still, {num_se}x Special, {num_pd1}x PD1, {num_pd2}x PD2, {num_pd3}x PD3"
+
+        print(owner_string)
+
+def print_detailed_orderbook(nftId, limit=None):
+    nft = Nft(nftId)
+    orderbook = nft.get_detailed_orders(limit)
+
+    for idx, order in enumerate(orderbook):
+        print(f"{idx+1}: [{order['pricePerNft']} ETH] x {order['amount']} | Owner: {order['sellerName']} "
+              f"({order['ownerAddress']}) | For Sale/Owned: {order['totalForSale']}/{order['numOwned']}")
+
+""" 
+Dumps the orderbook into an excel file
+"""
+def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
+    lr = loopring.LoopringAPI()
+    date = datetime.now().strftime('%Y-%m-%d')
+    date_and_time = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+    folder = f"Detailed_Orderbooks\\{date}"
+    filename = f"{date_and_time} {filename}.xlsx"
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
+    with pd.ExcelWriter(f"{folder}\\{filename}") as writer:
+        for nftId in nftId_list:
+            nft = Nft(nftId)
+            orderbook = nft.get_detailed_orders(limit)
+            print(orderbook)
+            df = pd.DataFrame(orderbook, columns=['pricePerNft', 'amount', 'sellerName', 'ownerAddress', 'totalForSale', 'numOwned'])
+            df.columns = ['Price', 'Amount', 'Seller', 'Address', 'Total # For Sale', 'Owned']
+            sheet_name = ''.join(x for x in nft.get_name() if (x.isalnum() or x in "._- "))[:31]
+            df.to_excel(writer, startrow=5, freeze_panes=(6,6), index=False, sheet_name=sheet_name)
+            worksheet = writer.sheets[sheet_name]
+            worksheet.write(0, 0, 'NFT Name')
+            worksheet.write(0, 1, nft.get_name())
+            worksheet.write(1, 0, 'NFT ID')
+            worksheet.write(1, 1, nftId)
+            worksheet.write(2, 0, 'Data Retrieved')
+            worksheet.write(2, 1, date_and_time)
+
+            num_holders, nft_holders = lr.get_nft_holders(nft.get_nft_data())
+            holders_sorted = sorted(nft_holders, key=lambda d: int(d['amount']), reverse=True)
+            holders_df = pd.DataFrame(holders_sorted, columns=['user', 'amount', 'address', 'accountId'])
+            holders_df.columns = ['User', 'Amount', 'Address', 'Account ID']
+            holders_df.to_excel(writer, startrow=5, startcol=8, freeze_panes=(6,12), index=False, sheet_name=sheet_name)
+            worksheet.write(3, 0, '# Holders')
+            worksheet.write(3, 1, num_holders)
+
+
+            for column in df:
+                column_width = max(df[column].astype(str).map(len).max(), len(column))
+                col_idx = df.columns.get_loc(column)
+                writer.sheets[sheet_name].set_column(col_idx, col_idx, column_width)
+
+
 
 
 
 
 if __name__ == "__main__":
-    grab_new_blocks()
-    # for nft in CC_LIST:
-    #       plot_price_history(nft, limit_volume=True)
+    dump_detailed_orderbook_and_holders(CC_CELEBRATION_LIST, "Cyber Crew Celebration Owners List and Orderbook", limit=3)
+    #find_complete_collection_owners()
+    #print_user_collection_ownership([PLS_PURPLE_DREAM, PLS_PURPLE_DREAM_2, PLS_PURPLE_DREAM_3, PLS_PURPLE_DREAM_STILL, PLS_SPECIAL])
+    #user = User(address="0xbe7bda8b66acb5159aaa022ab5d8e463e9fa8f7e")
+    #print(user.get_nft_number_owned(Nft(CC_CYBER_CYCLE).get_nft_data(), use_lr=True))
 
+    #lr = loopring.LoopringAPI()
+    #print(lr.filter_nft_txs(24419))

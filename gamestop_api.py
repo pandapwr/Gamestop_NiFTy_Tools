@@ -216,7 +216,7 @@ class Nft:
 
         else:
             # If NFT not found in database, query the API
-            print(f"Querying API for NFT {self.nft_id}")
+            #print(f"Querying API for NFT {self.nft_id}")
             if len(self.nft_id) > 100:
                 api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNft?"
                            f"tokenIdAndContractAddress={self.nft_id}")
@@ -264,6 +264,68 @@ class Nft:
         else:
             self.lowest_price = lowest_price
         return response
+
+
+    def get_detailed_orders(self, limit=None):
+        orders = self.get_orders()
+        orders.sort(key=lambda x: x['pricePerNft'])
+
+        orders_complete = orders.copy()
+
+        # If limit is specified, remove orders above max price
+        if limit is not None:
+            min_price = orders[0]['pricePerNft']
+            max_price = round(min_price * limit, 4)
+            print(f"Limiting results to orders with a max price of {max_price} ETH")
+            orders = [order for order in orders if order['pricePerNft'] <= max_price]
+
+        orderbook = dict()
+        idx = 1
+        for order in orders:
+            print(f"Getting order {idx} of {len(orders)}")
+            user = User(address=order['ownerAddress'])
+            order['sellerName'] = user.username
+            if len(order['sellerName']) > 30:
+                order['sellerName'] = f"{order['sellerName'][2:6]}...{order['sellerName'][-4:]}"
+
+            if user.username not in orderbook:
+                num_owned = user.get_nft_number_owned(self.get_nft_data(), use_lr=True)
+                if num_owned is None:
+                    num_owned = 0
+            else:
+                num_owned = orderbook[user.username][0]['numOwned']
+
+            order['numOwned'] = int(num_owned)
+            order['amount'] = int(order['amount']) - int(order['fulfilledAmount'])
+            if order['sellerName'] not in orderbook:
+                orderbook[order['sellerName']] = [order]
+            else:
+                orderbook[order['sellerName']].append(order)
+            idx += 1
+
+        # Count the number of total sales for each seller in the complete orderbook
+        seller_totals = dict()
+        for order in orders_complete:
+            user = User(address=order['ownerAddress'])
+            username = user.username
+            if len(username) > 30:
+                username = f"{username[2:6]}...{username[-4:]}"
+            if username not in seller_totals:
+                seller_totals[username] = int(order['amount'])
+            else:
+                seller_totals[username] += int(order['amount'])
+
+
+        # Remove any order where the seller no longer owns the NFT, and append total for sale for each seller
+        orderbook_purged = []
+        for order in orders:
+            if order['numOwned'] == 0:
+                continue
+            order['totalForSale'] = seller_totals[order['sellerName']]
+            orderbook_purged.append(order)
+
+        return orderbook_purged
+
 
     def get_sellers(self):
         if len(self.orders) == 0:
@@ -610,12 +672,20 @@ class User:
 
         return round(total_value, 2)
 
-    def get_nft_number_owned(self, nft_id):
+    def get_nft_number_owned(self, nft_id, use_lr=False):
         if len(self.owned_nfts) == 0:
-            self.owned_nfts = self.get_owned_nfts()
+            if use_lr:
+                self.owned_nfts = self.get_owned_nfts_lr()
+            else:
+                self.owned_nfts = self.get_owned_nfts()
         for nft in self.owned_nfts:
-            if nft['nftId'] == nft_id:
-                return nft['number_owned']
+            if use_lr:
+                if nft['nftData'] == nft_id:
+                    return nft['total']
+            else:
+                if nft['nftId'] == nft_id:
+                    return nft['number_owned']
+        return 0
 
     def check_new_collection(self):
         old_number_collections = self.number_of_collections

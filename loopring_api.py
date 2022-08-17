@@ -79,7 +79,7 @@ class LoopringAPI:
         return account_id
 
     @sleep_and_retry
-    @limits(calls=4, period=1)
+    @limits(calls=5, period=1)
     def get_user_nft_balance(self, accountId):
         limit = 50
         offset = 0
@@ -87,11 +87,14 @@ class LoopringAPI:
         while True:
             api_url = (f"https://api3.loopring.io/api/v3/user/nft/balances?accountId={accountId}"
                        f"&offset={offset}&limit={limit}")
-            response = self.lr.get(api_url).json()
-            data.extend(response['data'])
-            if response['totalNum'] == 0:
-                break
-            offset += limit
+            try:
+                response = self.lr.get(api_url).json()
+                data.extend(response['data'])
+                if response['totalNum'] == 0:
+                    break
+                offset += limit
+            except requests.exceptions.JSONDecodeError:
+                continue
 
         return data
 
