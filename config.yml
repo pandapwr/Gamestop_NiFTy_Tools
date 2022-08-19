@@ -1,2 +1,9 @@
 loopring:
-  api_key: "YOUR_API_KEY"
+  api_keys: ["YOUR LIST OF API KEYS HERE"]
+
+discord:
+  serverIds:
+    cybercrew:
+      invite_code: "KWeq4aGF"
+      server_id: 874623755165503549
+  token: "YOUR DISCORD TOKEN HERE"

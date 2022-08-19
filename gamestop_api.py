@@ -280,9 +280,9 @@ class Nft:
             orders = [order for order in orders if order['pricePerNft'] <= max_price]
 
         orderbook = dict()
-        idx = 1
-        for order in orders:
-            print(f"Getting order {idx} of {len(orders)}")
+
+        def fetch_owned_nfts(idx, order):
+            print(f"Getting order {idx+1} of {len(orders)}")
             user = User(address=order['ownerAddress'])
             order['sellerName'] = user.username
             if len(order['sellerName']) > 30:
@@ -296,12 +296,15 @@ class Nft:
                 num_owned = orderbook[user.username][0]['numOwned']
 
             order['numOwned'] = int(num_owned)
+
             order['amount'] = int(order['amount']) - int(order['fulfilledAmount'])
             if order['sellerName'] not in orderbook:
                 orderbook[order['sellerName']] = [order]
             else:
                 orderbook[order['sellerName']].append(order)
-            idx += 1
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(fetch_owned_nfts, idx, order) for idx, order in enumerate(orders)]
 
         # Count the number of total sales for each seller in the complete orderbook
         seller_totals = dict()
@@ -314,7 +317,6 @@ class Nft:
                 seller_totals[username] = int(order['amount'])
             else:
                 seller_totals[username] += int(order['amount'])
-
 
         # Remove any order where the seller no longer owns the NFT, and append total for sale for each seller
         orderbook_purged = []
@@ -349,10 +351,7 @@ class Nft:
                      'price': order['pricePerNft']})
 
         def get_username(address):
-            print(address)
             user = User(f"{address}")
-
-            print(user.username)
             return [address, user.username, 2]
 
         with ThreadPoolExecutor(max_workers=50) as executor:
@@ -382,8 +381,6 @@ class Nft:
                   f"edition{'s' if self.sellers[seller]['amount_for_sale'] > 1 else ''} for sale: "
                   f"{[price for price in prices]}"
                   )
-
-
 
 
     def get_history(self):
@@ -470,8 +467,6 @@ class Nft:
             return self.data['attributes']
         else:
             return self.data['metadataJson']['properties']
-
-
 
     def get_nft_data(self):
         if self.from_db:
@@ -601,8 +596,7 @@ class User:
 
     def get_owned_nfts_lr(self):
         lr = loopring.LoopringAPI()
-        account_id = lr.get_accountId_from_address(self.address)
-        nfts = lr.get_user_nft_balance(account_id)
+        nfts = lr.get_user_nft_balance(self.accountId)
         return nfts
 
 

@@ -1543,6 +1543,7 @@ Dumps the orderbook into an excel file
 """
 def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
     lr = loopring.LoopringAPI()
+    gs = GamestopApi()
     date = datetime.now().strftime('%Y-%m-%d')
     date_and_time = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
     folder = f"Detailed_Orderbooks\\{date}"
@@ -1557,6 +1558,8 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
             print(orderbook)
             df = pd.DataFrame(orderbook, columns=['pricePerNft', 'amount', 'sellerName', 'ownerAddress', 'totalForSale', 'numOwned'])
             df.columns = ['Price', 'Amount', 'Seller', 'Address', 'Total # For Sale', 'Owned']
+            df['Price USD'] = round(df['Price'] * gs.eth_usd, 2)
+            df = df[['Price', 'Price USD', 'Amount', 'Seller', 'Address', 'Total # For Sale', 'Owned']]
             sheet_name = ''.join(x for x in nft.get_name() if (x.isalnum() or x in "._- "))[:31]
             df.to_excel(writer, startrow=5, freeze_panes=(6,6), index=False, sheet_name=sheet_name)
             worksheet = writer.sheets[sheet_name]
@@ -1586,8 +1589,12 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
 
 
 
+
+
+
 if __name__ == "__main__":
-    dump_detailed_orderbook_and_holders(CC_CELEBRATION_LIST, "Cyber Crew Celebration Owners List and Orderbook", limit=3)
+    print_users_holdings_report([91727], "91727")
+    #dump_detailed_orderbook_and_holders(GEORGE_LIST, "Georges Owner List and Orderbook", limit=3)
     #find_complete_collection_owners()
     #print_user_collection_ownership([PLS_PURPLE_DREAM, PLS_PURPLE_DREAM_2, PLS_PURPLE_DREAM_3, PLS_PURPLE_DREAM_STILL, PLS_SPECIAL])
     #user = User(address="0xbe7bda8b66acb5159aaa022ab5d8e463e9fa8f7e")

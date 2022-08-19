@@ -1,10 +1,12 @@
 import requests
-from datetime import datetime
 from ratelimit import limits, sleep_and_retry
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import gamestop_api
 import nifty_database as nifty
 import yaml
+from random import randint
+
+MAX_INPUT = 13
 
 
 class LoopringAPI:
@@ -12,10 +14,12 @@ class LoopringAPI:
         with open('config.yml', 'r') as config:
             self.config = yaml.safe_load(config)['loopring']
 
+        self.api_keys = self.config['api_keys']
+
         self.lr = requests.session()
         self.lr.headers.update({
             'Accept': 'application/json',
-            'X-API-KEY': self.config['api_key'],
+            'X-API-KEY': self.api_keys[randint(0, 3)]
         })
 
     def get_num_nft_holders(self, nftData):
@@ -61,6 +65,10 @@ class LoopringAPI:
                     holders_list.append({'user': future.result()['user'], 'accountId': future.result()['accountId'],
                                          'amount': future.result()['amount'], 'address': future.result()['address']})
 
+        for holder in holders_list:
+            if len(holder['user']) > 30:
+                holder['user'] = f"{holder['user'][2:6]}...{holder['user'][-4:]}"
+
         return total_holders, holders_list
 
     @sleep_and_retry
@@ -105,24 +113,27 @@ class LoopringAPI:
 
         return response
 
-    def get_pending(self):
+    def get_pending(self, spot_trades=True, transfers=True, mints=True):
         api_url = "https://api3.loopring.io/api/v3/block/getPendingRequests"
         response = self.lr.get(api_url).json()
 
         nft_txs = dict()
         nft_txs['transactions'] = []
 
-        spot_trades = [tx for tx in response if tx['txType'] == 'SpotTrade']
-        spot_trades_nft = [tx for tx in spot_trades if tx['orderA']['nftData'] != '']
-        nft_txs['transactions'].extend(spot_trades_nft)
+        if spot_trades:
+            spot_trades = [tx for tx in response if tx['txType'] == 'SpotTrade']
+            spot_trades_nft = [tx for tx in spot_trades if tx['orderA']['nftData'] != '']
+            nft_txs['transactions'].extend(spot_trades_nft)
 
-        transfers = [tx for tx in response if tx['txType'] == 'Transfer']
-        transfers_nft = [tx for tx in transfers if tx['token']['nftData'] != '']
-        nft_txs['transactions'].extend(transfers_nft)
+        if transfers:
+            transfers = [tx for tx in response if tx['txType'] == 'Transfer']
+            transfers_nft = [tx for tx in transfers if tx['token']['nftData'] != '']
+            nft_txs['transactions'].extend(transfers_nft)
 
-        mints = [tx for tx in response if tx['txType'] == 'NftMint']
-        mints_nft = [tx for tx in mints if tx['nftToken']['nftData'] != '']
-        nft_txs['transactions'].extend(mints_nft)
+        if mints:
+            mints = [tx for tx in response if tx['txType'] == 'NftMint']
+            mints_nft = [tx for tx in mints if tx['nftToken']['nftData'] != '']
+            nft_txs['transactions'].extend(mints_nft)
         return nft_txs
 
     # Grabs the given block and filters for transactions with nftData
