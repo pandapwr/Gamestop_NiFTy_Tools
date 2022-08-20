@@ -1585,10 +1585,26 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
                 writer.sheets[sheet_name].set_column(col_idx, col_idx, column_width)
 
 def plot_eth_volume(nft_list, period = [1,7,30]):
+    """
+    Provide a bar plot of ETH Volume for a list of NFT
+
+    Parameters
+    ----------
+    nft_list : List of NFT_id
+    period : Int in days, 0 = all time
+
+    Returns
+    Barplot
+    -------
+
+    """
     now = datetime.now() # Calculating it here so everything has the same base time
     p = []
     for i in period:
-        p.append(f'{i} day period')
+        if i == 0:
+            p.append('All time')
+        else:
+            p.append(f'{i} day period')
 
     vol_df = pd.DataFrame(columns = ["Name"]+p)
     for nft in nft_list:
@@ -1610,6 +1626,10 @@ def plot_eth_volume(nft_list, period = [1,7,30]):
 
 
 def get_volume_for_nft(nft_id, period, now=datetime.now()):
+    """
+    Helper function for plot_eth_volume
+    Returns : A list that contains NFT name, and Eth volume in the different periods
+    """
 
     # Getting trading history from db
     nf = nifty.NiftyDB()
@@ -1625,10 +1645,13 @@ def get_volume_for_nft(nft_id, period, now=datetime.now()):
     # Exctracting a list of ETH volume based on days in period
     sum_list = [nft_data['name']]
     for i in period:
-        end = now-timedelta(days = i)
-        mask = (df['createdAt'] < now) & (df['createdAt'] >= end)
-        masked_df = df.loc[mask]
-        sum_list.append((masked_df['amount']*masked_df['price']).sum())
+        if i == 0:
+            sum_list.append((df['amount']*df['price']).sum())
+        else:
+            end = now-timedelta(days = i)
+            mask =  (df['createdAt'] >= end)
+            masked_df = df.loc[mask]
+            sum_list.append((masked_df['amount']*masked_df['price']).sum())
     return sum_list
 
 
@@ -1641,7 +1664,7 @@ def get_volume_for_nft(nft_id, period, now=datetime.now()):
 
 if __name__ == "__main__":
     grab_new_blocks(find_new_users=False)
-    plot_eth_volume(CC_LIST+CC_CELEBRATION_LIST, [1,7,30])
+    plot_eth_volume(CC_LIST+CC_CELEBRATION_LIST, [1,7,30,0])
     # print_users_holdings_report([91727], "91727")
     #dump_detailed_orderbook_and_holders(GEORGE_LIST, "Georges Owner List and Orderbook", limit=3)
     #find_complete_collection_owners()
