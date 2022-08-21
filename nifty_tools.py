@@ -1,5 +1,5 @@
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import pandas as pd
 import plotly.graph_objects as go
@@ -1584,6 +1584,76 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
                 col_idx = df.columns.get_loc(column)
                 writer.sheets[sheet_name].set_column(col_idx, col_idx, column_width)
 
+def plot_eth_volume(nft_list, period = [1,7,30]):
+    """
+    Provide a bar plot of ETH Volume for a list of NFT
+
+    Parameters
+    ----------
+    nft_list : List of NFT_id
+    period : Int in days, 0 = all time
+
+    Returns
+    Barplot
+    -------
+
+    """
+    now = datetime.now() # Calculating it here so everything has the same base time
+    p = []
+    for i in period:
+        if i == 0:
+            p.append('All time')
+        else:
+            p.append(f'{i} day period')
+
+    vol_df = pd.DataFrame(columns = ["Name"]+p)
+    for nft in nft_list:
+        sum = get_volume_for_nft(nft, period, now)
+        vol_df.loc[len(vol_df)] = sum
+    sub_plots = len(p)
+    # fig = go.Figure()
+    fig = make_subplots(rows=sub_plots, cols=1,
+                        subplot_titles=(p))
+    i = 1
+    for peri in p:
+        fig.add_trace(
+            go.Bar(x=vol_df.Name, y=vol_df[peri], name=peri, texttemplate="%{value}", textangle=0),
+        row=i, col=1)
+        fig.update_layout(title_text=f"ETH Volume", title_x=0.5, template="plotly_dark")
+        # fig.update_yaxes(title_text="Per wallet")
+        i+=1
+    fig.show()
+
+
+def get_volume_for_nft(nft_id, period, now=datetime.now()):
+    """
+    Helper function for plot_eth_volume
+    Returns : A list that contains NFT name, and Eth volume in the different periods
+    """
+
+    # Getting trading history from db
+    nf = nifty.NiftyDB()
+    nft_data = nf.get_nft_data(nft_id)
+    data = nf.get_nft_trade_history(nft_id)
+    df = pd.DataFrame(data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
+                                     'amount', 'price', 'priceUsd', 'seller', 'buyer'])
+    df.drop(df[df.txType != "SpotTrade"].index, inplace=True)
+    df.createdAt = pd.to_datetime(df.createdAt, unit='s')
+    df.set_index('createdAt')
+    df = df.loc[df['txType'] == 'SpotTrade']
+
+    # Exctracting a list of ETH volume based on days in period
+    sum_list = [nft_data['name']]
+    for i in period:
+        if i == 0:
+            sum_list.append((df['amount']*df['price']).sum())
+        else:
+            end = now-timedelta(days = i)
+            mask =  (df['createdAt'] >= end)
+            masked_df = df.loc[mask]
+            sum_list.append((masked_df['amount']*masked_df['price']).sum())
+    return sum_list
+
 
 
 
@@ -1593,7 +1663,9 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
 
 
 if __name__ == "__main__":
-    print_users_holdings_report([91727], "91727")
+    grab_new_blocks(find_new_users=False)
+    plot_eth_volume(CC_LIST+CC_CELEBRATION_LIST, [1,7,30,0])
+    # print_users_holdings_report([91727], "91727")
     #dump_detailed_orderbook_and_holders(GEORGE_LIST, "Georges Owner List and Orderbook", limit=3)
     #find_complete_collection_owners()
     #print_user_collection_ownership([PLS_PURPLE_DREAM, PLS_PURPLE_DREAM_2, PLS_PURPLE_DREAM_3, PLS_PURPLE_DREAM_STILL, PLS_SPECIAL])

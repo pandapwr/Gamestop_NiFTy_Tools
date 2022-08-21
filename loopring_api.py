@@ -15,11 +15,11 @@ class LoopringAPI:
             self.config = yaml.safe_load(config)['loopring']
 
         self.api_keys = self.config['api_keys']
-
+        number_of_keys = len(self.api_keys)-1
         self.lr = requests.session()
         self.lr.headers.update({
             'Accept': 'application/json',
-            'X-API-KEY': self.api_keys[randint(0, 3)]
+            'X-API-KEY': self.api_keys[randint(0, number_of_keys)]
         })
 
     def get_num_nft_holders(self, nftData):
