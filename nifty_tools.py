@@ -1749,7 +1749,7 @@ if __name__ == "__main__":
 
     #lr = loopring.LoopringAPI()
     #print(lr.filter_nft_txs(24419))
-    find_complete_owners(MB_ONLY_LIST)
+
 
     #print_user_collection_ownership(PLS_PD_LIST+PLS_PASS_LIST)
     pass

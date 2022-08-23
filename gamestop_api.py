@@ -665,8 +665,9 @@ class User:
             if nft_obj.get_total_number() == 1:
                 collection = NftCollection(nft_obj.get_collection())
                 price = collection.get_floor_price()
-            print(f"Value of {nft_obj.get_name()}: {str(price)} ETH")
-            return price * float(amount_owned) * eth_usd
+            nft_value = round(price * float(amount_owned) * eth_usd, 2)
+            print(f"Value of {nft_obj.get_name()} owned: {str(price)} ETH (${str(nft_value)})")
+            return nft_value
 
         with ThreadPoolExecutor(max_workers=50) as executor:
             futures = [executor.submit(get_nft_value, nft['nftId'], nft['number_owned']) for nft in owned_nfts]
