@@ -332,6 +332,61 @@ def plot_collection_price_history(collection_id):
     for nft in nfts:
         plot_price_history(nft['nftId'], save_file=True)
 
+def find_complete_owners(nftId_list):
+    nftData_list = []
+    for item in nftId_list:
+        nft = Nft(item)
+        nftData_list.append(nft.get_nft_data())
+
+    # Get the owners from of each NFT from Loopring API
+    lr = loopring.LoopringAPI()
+    owners = []
+    for nftData in nftData_list:
+        _, holders = lr.get_nft_holders(nftData)
+        owners.append(holders)
+
+    # Create a list of accountIds holding the NFTs in the list
+    owners_accountId_list = []
+    for idx, nft_owners in enumerate(owners):
+        owners_accountId_list.append([nft_owner['accountId'] for nft_owner in nft_owners])
+
+    # Find which owners own all of the NFTs in the list
+    complete_owners = owners_accountId_list[0]
+    for i in range(len(nftData_list)-1):
+        complete_owners = set(complete_owners).intersection(owners_accountId_list[i+1])
+
+    # For each complete collection owner, find their username and address and find which of the NFTs they own the least of
+    complete_owners_list = []
+    for owner in complete_owners:
+        user = User(accountId=owner)
+        checked_all_nfts = False
+        least_held = 100000
+
+        for i in range(len(owners)):
+            amount_held = next((holder for holder in owners[i] if holder["accountId"] == owner), False)
+            if int(amount_held['amount']) < least_held:
+                least_held = int(amount_held['amount'])
+
+        user_dict = {'username': user.username, 'accountId': owner, 'address': user.address, 'amount': least_held}
+        complete_owners_list.append(user_dict)
+
+    # Get the names of the NFTs included in this report
+    nft_names = []
+    for nftId in nftId_list:
+        nft = Nft(nftId)
+        nft_names.append(nft.get_name())
+    print(f"\n{nft_names}")
+
+    total_complete_sets = 0
+    for owner in complete_owners_list:
+        total_complete_sets += owner['amount']
+        print(f"{owner['username']} - {owner['accountId']} - {owner['address']} holds {owner['amount']} complete sets")
+
+    print(f"\nTotal Unique Complete Collection Owners: {len(complete_owners_list)}")
+    print(f"Total number of complete sets: {total_complete_sets}")
+
+
+
 def find_complete_plsty_owners():
     PLSTY_NFTDATA = ["0x158d8f800054785b08a629c8df0e25c8218b0fb72aadda6f7ee158598b8a82ce",
                      "0x09dec41f15883293afe0cce5167a6e47cdf3965d350e476c4a9e834afee31459",
@@ -1497,6 +1552,8 @@ def print_user_collection_ownership(nftId_list):
 
     print(owners_dict)
 
+
+    final_list = []
     for owner in owners_dict:
         owner_string = f"{owner} ({owners_dict[owner][0]['ownerName']}): "
         num_still = 0
@@ -1505,6 +1562,9 @@ def print_user_collection_ownership(nftId_list):
         num_pd3 = 0
         num_se = 0
         num_complete_sets = 0
+        num_pass_blue = 0
+        num_pass_green = 0
+        num_pass_pink = 0
 
         for nft in owners_dict[owner]:
             if nft['nftId'] == PLS_PURPLE_DREAM:
@@ -1517,6 +1577,12 @@ def print_user_collection_ownership(nftId_list):
                 num_still += int(nft['amount'])
             elif nft['nftId'] == PLS_SPECIAL:
                 num_se += int(nft['amount'])
+            elif nft['nftId'] == PLS_PASS_GREEN:
+                num_pass_green += int(nft['amount'])
+            elif nft['nftId'] == PLS_PASS_PINK:
+                num_pass_pink += int(nft['amount'])
+            elif nft['nftId'] == PLS_PASS_BLUE:
+                num_pass_blue += int(nft['amount'])
 
 
         num_still_se = min([num_still, num_se])
@@ -1529,6 +1595,17 @@ def print_user_collection_ownership(nftId_list):
         owner_string += f"{num_still}x Still, {num_se}x Special, {num_pd1}x PD1, {num_pd2}x PD2, {num_pd3}x PD3"
 
         print(owner_string)
+
+        owner_dict={'address':owner, 'username':owners_dict[owner][0]['ownerName'], '3of5':num_3of5,
+                    '5of5':num_complete_sets, 'still':num_still, 'special':num_se, 'pd1':num_pd1, 'pd2':num_pd2,
+                    'pd3':num_pd3, 'pass_blue':num_pass_blue, 'pass_green':num_pass_green, 'pass_pink':num_pass_pink}
+        final_list.append(owner_dict)
+
+    df = pd.DataFrame(final_list, columns=['address', 'username', '3of5', '5of5', 'still', 'special', 'pd1', 'pd2', 'pd3',
+                                           'pass_blue', 'pass_green', 'pass_pink'])
+    df.columns = ['Address', 'Username', '3 of 5 Sets', '5 of 5 Sets', 'Still', 'Special', 'PD1', 'PD2', 'PD3', 'Blue Pass', 'Green Pass', 'Pink Pass']
+    print(df.to_string())
+    df.to_excel('PLSTY Collection Ownership.xlsx')
 
 def print_detailed_orderbook(nftId, limit=None):
     nft = Nft(nftId)
@@ -1663,10 +1740,8 @@ def get_volume_for_nft(nft_id, period, now=datetime.now()):
 
 
 if __name__ == "__main__":
-    grab_new_blocks(find_new_users=False)
-    plot_eth_volume(CC_LIST+CC_CELEBRATION_LIST, [1,7,30,0])
-    # print_users_holdings_report([91727], "91727")
-    #dump_detailed_orderbook_and_holders(GEORGE_LIST, "Georges Owner List and Orderbook", limit=3)
+    #print_users_holdings_report([91727], "91727")
+    #dump_detailed_orderbook_and_holders(PLS_LIST+PLS_PASS_LIST, "PLSTY Owner List and Orderbook", limit=3)
     #find_complete_collection_owners()
     #print_user_collection_ownership([PLS_PURPLE_DREAM, PLS_PURPLE_DREAM_2, PLS_PURPLE_DREAM_3, PLS_PURPLE_DREAM_STILL, PLS_SPECIAL])
     #user = User(address="0xbe7bda8b66acb5159aaa022ab5d8e463e9fa8f7e")
@@ -1674,3 +1749,7 @@ if __name__ == "__main__":
 
     #lr = loopring.LoopringAPI()
     #print(lr.filter_nft_txs(24419))
+    find_complete_owners(MB_ONLY_LIST)
+
+    #print_user_collection_ownership(PLS_PD_LIST+PLS_PASS_LIST)
+    pass

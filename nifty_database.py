@@ -40,10 +40,10 @@ class NiftyDB:
         self.conn.commit()
 
     def insert_nft(self, nftId, nftData, tokenId, contractAddress, creatorEthAddress, name, amount, attributes,
-                   collectionId, createdAt, firstMintedAt, updatedAt):
-        self.c.execute("INSERT INTO nfts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                   collectionId, createdAt, firstMintedAt, updatedAt, thumbnailUrl):
+        self.c.execute("INSERT INTO nfts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                        (nftId, nftData, tokenId, contractAddress, creatorEthAddress, name, amount, attributes,
-                        collectionId, createdAt, firstMintedAt, updatedAt))
+                        collectionId, createdAt, firstMintedAt, updatedAt, thumbnailUrl))
         self.conn.commit()
 
     def insert_traits(self, nftId, collectionId, traits):
@@ -85,6 +85,33 @@ class NiftyDB:
                  f"'{num_online}')")
         self.c.execute(query)
         self.conn.commit()
+
+    def insert_paperhand_order(self, orderHash):
+        query = (f"INSERT INTO paperhands VALUES ('{orderHash}')")
+        self.c.execute(query)
+        self.conn.commit()
+
+    def insert_floor_price(self, nftId, floor_price, last_updated):
+        query = (f"INSERT INTO floor_prices VALUES ('{nftId}', '{floor_price}', '{last_updated}')")
+        self.c.execute(query)
+        self.conn.commit()
+
+    def get_old_floor_price(self, nftId):
+        query = (f"SELECT * FROM floor_prices WHERE nftId='{nftId}'")
+        self.c.execute(query)
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result['floor']
+
+    def get_paperhand_order(self, orderHash):
+        self.c.execute("SELECT * FROM paperhands WHERE orderHash=?", (orderHash,))
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result
 
     def get_discord_server_stats(self, serverId):
         self.c.execute("SELECT * FROM discord_stats WHERE serverId=?", (serverId,))
@@ -164,6 +191,14 @@ class NiftyDB:
             return None
         else:
             return result['price']
+
+    def get_all_nfts(self):
+        self.c.execute("SELECT * FROM nfts")
+        result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
 
 
     def insert_historical_price_data(self, currency, dataFrame):

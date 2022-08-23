@@ -102,9 +102,16 @@ class NftCollection:
         else:
             api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftsPaginated?"
                        f"limit={limit}&offset={offset}&collectionId={self.collectionID}&sortBy={sort}&sortOrder={sort_order}")
-        response = requests.get(api_url, headers=self.headers).json()['data']
 
-        return self._add_datetime(response)
+        response = requests.get(api_url, headers=self.headers)
+        if response.status_code == 200:
+            response = response.json()['data']
+            for nft in response:
+                Nft(nft['nftId'])
+
+            return self._add_datetime(response)
+        else:
+            return None
 
     def get_collection_metadata(self):
         api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionMetadata?"
@@ -149,8 +156,8 @@ class NftCollection:
     def get_for_sale(self):
         return self.stats['forSale']
 
-    def get_nft_list(self):
-        return [nft_id['nftId'] for nft_id in self.collection_nfts]
+    def get_nftId_list(self):
+        return [nft['nftId'] for nft in self.collection_nfts]
 
 
 class Nft:
@@ -209,6 +216,7 @@ class Nft:
             data['createdAt'] = db_data['createdAt']
             data['updatedAt'] = db_data['updatedAt']
             data['firstMintedAt'] = db_data['firstMintedAt']
+            data['thumbnailUrl'] = db_data['thumbnailUrl']
             self.on_gs_nft = True
             self.from_db = True
 
@@ -235,10 +243,11 @@ class Nft:
                 response['createdAt'] = time.mktime(response['createdAt'].timetuple())
                 response['updatedAt'] = time.mktime(response['updatedAt'].timetuple())
                 response['firstMintedAt'] = time.mktime(response['firstMintedAt'].timetuple())
+                thumbnailUrl = f"https://www.gstop-content.com/ipfs/{response['mediaThumbnailUri'][7:]}"
                 db.insert_nft(response['nftId'], response['loopringNftInfo']['nftData'][0], response['tokenId'],
                               response['contractAddress'], response['creatorEthAddress'], response['metadataJson']['name'],
                               response['amount'], json.dumps(response['metadataJson']['properties']), response['collectionId'],
-                              response['createdAt'], response['firstMintedAt'], response['updatedAt'])
+                              response['createdAt'], response['firstMintedAt'], response['updatedAt'], thumbnailUrl)
                 db.close()
                 return response
             else:
@@ -688,6 +697,12 @@ class User:
             return True
         else:
             return False
+
+    def get_username(self):
+        if len(self.username) > 30:
+            return f"{self.username[2:6]}...{self.username[-4:]}"
+        else:
+            return self.username
 
 
 class UrlDecoder:
