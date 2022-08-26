@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import gamestop_api
 import nifty_database as nifty
 import yaml
+import time
 from random import randint
 
 MAX_INPUT = 13
@@ -31,7 +32,7 @@ class LoopringAPI:
 
         return total_num
 
-    def get_nft_holders(self, nftData):
+    def get_nft_holders(self, nftData, verbose=True):
         index = 0
         results_limit = 500
         total_holders = self.get_num_nft_holders(nftData)
@@ -40,7 +41,15 @@ class LoopringAPI:
         while True:
             api_url = (f"https://api3.loopring.io/api/v3/nft/info/nftHolders?nftData={nftData}"
                        f"&offset={index}&limit={results_limit}")
-            response = self.lr.get(api_url).json()
+
+            while True:
+                response = self.lr.get(api_url)
+                if response.status_code == 200:
+                    response = response.json()
+                    break
+                else:
+                    time.sleep(1)
+
             holders = response['nftHolders']
 
             if response['totalNum'] == 0:
@@ -52,15 +61,16 @@ class LoopringAPI:
                     db = nifty.NiftyDB()
                     _, address, username = db.get_user_info(accountId=accountId)
                     if username is not None:
-                        return {'address': address, 'user': username, 'accountId': accountId, 'amount': amount}
+                        return {'address': address, 'user': username, 'accountId': accountId, 'amount': int(amount)}
                     else:
                         address = self.get_user_address(accountId)
                         username = gamestop_api.User(address=address).username
-                        return {'address': address, 'user': username, 'accountId': accountId, 'amount': amount}
+                        return {'address': address, 'user': username, 'accountId': accountId, 'amount': int(amount)}
 
                 futures = [executor.submit(check_db_for_user_info, holder['accountId'], holder['amount']) for holder in holders]
                 for future in as_completed(futures):
-                    print(f"{index+1}/{total_holders}: {future.result()['user']} ({future.result()['accountId']}) owns {future.result()['amount']}")
+                    if verbose:
+                        print(f"{index+1}/{total_holders}: {future.result()['user']} ({future.result()['accountId']}) owns {future.result()['amount']}")
                     index += 1
                     holders_list.append({'user': future.result()['user'], 'accountId': future.result()['accountId'],
                                          'amount': future.result()['amount'], 'address': future.result()['address']})

@@ -39,12 +39,42 @@ class GamestopApi:
     def get_newest_collections(self, limit=48):
         return self.get_collections(limit=limit, offset=0, sort="created", sort_order="desc")
 
-    def get_collections(self, limit, offset, sort, sort_order):
-        api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionsPaginated?"
-                   f"limit={limit}&offset={offset}&sortBy={sort}&sortOrder={sort_order}")
-        response = requests.get(api_url, headers=self.headers).json()['data']
+    def get_collections(self, get_all=True, limit=0, offset=0, sort="created", sort_order="asc"):
+        if get_all:
+            api_url = "https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionsPaginated?limit=0&sortBy=random"
+            response = requests.get(api_url, headers=self.headers)
+            if response.status_code == 200:
+                total_num = response.json()['data']['totalNum']
+            else:
+                return None
 
-        return self._add_datetime(response)
+            remaining = total_num
+            collections_list = []
+            while remaining > 0:
+                api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionsPaginated?limit={limit}&offset={offset}&sortBy={sort}&sortOrder={sort_order}"
+                response = requests.get(api_url, headers=self.headers)
+                if response.status_code == 200:
+                    data = response.json()['data']
+                    collections_list.extend(data)
+                    offset += limit
+                    remaining -= limit
+                else:
+                    return None
+
+                collections_list = self._add_datetime(collections_list)
+                return collections_list
+
+        else:
+            api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionsPaginated?"
+                       f"limit={limit}&offset={offset}&sortBy={sort}&sortOrder={sort_order}")
+            response = requests.get(api_url, headers=self.headers)
+            if response.status_code == 200:
+                response = response.json()
+                response = self._add_datetime(response)
+                return response
+            else:
+                return None
+
 
     def usd(self, value):
         return value * self.eth_usd
@@ -56,7 +86,7 @@ class NftCollection:
         self.collectionID = collectionID
         self.stats = self.get_collection_stats()
         self.metadata = self.get_collection_metadata()
-        self.collection_nfts = self.get_collection_nfts(get_all=True)
+        self.collection_nfts = []
 
     def _add_datetime(self, data):
 
@@ -87,31 +117,45 @@ class NftCollection:
 
         return response
 
-    def get_collection_nfts(self, get_all=False, limit=48, offset=0, sort="created", sort_order="asc"):
+    def get_collection_nfts(self, get_all=True, limit=48, offset=0, sort="created", sort_order="asc"):
 
         # Get the total number of items in the collection
         api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftsPaginated?"
                    f"limit=0&collectionId={self.collectionID}")
         response = requests.get(api_url, headers=self.headers).json()
         num_items = response['totalNum']
+        print(f"{self.get_name()} has {num_items} items, grabbing NFTs now...")
 
         # Get the items in the collection
-        if get_all:
-            api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftsPaginated?"
-                       f"limit={num_items}&offset=0&collectionId={self.collectionID}&sortBy={sort}&sortOrder={sort_order}")
+        if get_all and num_items > 500:
+            remaining = num_items
+            offset = 0
+            nfts = []
+            while remaining > 0:
+                print(f"{remaining} NFTs remaining...")
+                api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftsPaginated?"
+                           f"limit=500&offset={offset}&collectionId={self.collectionID}&sortBy={sort}&sortOrder={sort_order}")
+                offset += 500
+                remaining -= 500
+                response = requests.get(api_url, headers=self.headers)
+                if response.status_code == 200:
+                    nfts.extend(response.json()['data'])
         else:
             api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftsPaginated?"
                        f"limit={limit}&offset={offset}&collectionId={self.collectionID}&sortBy={sort}&sortOrder={sort_order}")
+            response = requests.get(api_url, headers=self.headers)
+            if response.status_code == 200:
+                nfts = response.json()['data']
 
-        response = requests.get(api_url, headers=self.headers)
-        if response.status_code == 200:
-            response = response.json()['data']
-            for nft in response:
-                Nft(nft['nftId'])
+        if response.status_code != 200:
+            return None
+        else:
+            print(f"Retrieved {len(nfts)} NFTs in {self.metadata['name']}")
+            for idx, nft in enumerate(nfts):
+                data = Nft(nft['nftId'])
 
             return self._add_datetime(response)
-        else:
-            return None
+
 
     def get_collection_metadata(self):
         api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionMetadata?"
@@ -217,6 +261,7 @@ class Nft:
             data['updatedAt'] = db_data['updatedAt']
             data['firstMintedAt'] = db_data['firstMintedAt']
             data['thumbnailUrl'] = db_data['thumbnailUrl']
+            data['mintPrice'] = db_data['mintPrice']
             self.on_gs_nft = True
             self.from_db = True
 
@@ -247,7 +292,7 @@ class Nft:
                 db.insert_nft(response['nftId'], response['loopringNftInfo']['nftData'][0], response['tokenId'],
                               response['contractAddress'], response['creatorEthAddress'], response['metadataJson']['name'],
                               response['amount'], json.dumps(response['metadataJson']['properties']), response['collectionId'],
-                              response['createdAt'], response['firstMintedAt'], response['updatedAt'], thumbnailUrl)
+                              response['createdAt'], response['firstMintedAt'], response['updatedAt'], thumbnailUrl, 0)
                 db.close()
                 return response
             else:
@@ -511,6 +556,9 @@ class Nft:
         if len(self.orders) == 0:
             self.get_orders()
         return float(self.lowest_price)
+
+    def get_mint_price(self):
+        return float(self.data['mintPrice'])
 
 
 class User:
