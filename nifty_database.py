@@ -40,10 +40,10 @@ class NiftyDB:
         self.conn.commit()
 
     def insert_nft(self, nftId, nftData, tokenId, contractAddress, creatorEthAddress, name, amount, attributes,
-                   collectionId, createdAt, firstMintedAt, updatedAt, thumbnailUrl):
-        self.c.execute("INSERT INTO nfts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                   collectionId, createdAt, firstMintedAt, updatedAt, thumbnailUrl, mintPrice):
+        self.c.execute("INSERT INTO nfts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                        (nftId, nftData, tokenId, contractAddress, creatorEthAddress, name, amount, attributes,
-                        collectionId, createdAt, firstMintedAt, updatedAt, thumbnailUrl))
+                        collectionId, createdAt, firstMintedAt, updatedAt, thumbnailUrl, mintPrice))
         self.conn.commit()
 
     def insert_traits(self, nftId, collectionId, traits):
@@ -274,7 +274,7 @@ class NiftyDB:
             return result
 
     def get_nfts_in_collection(self, collectionId):
-        query = f"SELECT name, collectionId, nftId FROM nfts WHERE collectionId = '{collectionId}'"
+        query = f"SELECT name, collectionId, nftId, nftData FROM nfts WHERE collectionId = '{collectionId}' ORDER BY name LIMIT 200"
         self.c.execute(query)
         result = self.c.fetchall()
         if result is None:

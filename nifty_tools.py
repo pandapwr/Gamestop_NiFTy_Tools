@@ -9,6 +9,8 @@ from PIL import Image
 import networkx as nx
 from concurrent.futures import ThreadPoolExecutor
 from xlsxwriter import Workbook
+
+import gamestop_api
 import loopring_api as loopring
 import discord_api as discord
 from gamestop_api import User, Nft, NftCollection, GamestopApi
@@ -1575,7 +1577,7 @@ def print_user_collection_ownership(nftId_list):
                 num_pd3 += int(nft['amount'])
             elif nft['nftId'] == PLS_PURPLE_DREAM_STILL:
                 num_still += int(nft['amount'])
-            elif nft['nftId'] == PLS_SPECIAL:
+            elif nft['nftId'] == PLS_PURPLE_DREAM_SPECIAL:
                 num_se += int(nft['amount'])
             elif nft['nftId'] == PLS_PASS_GREEN:
                 num_pass_green += int(nft['amount'])
@@ -1629,7 +1631,7 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
         os.makedirs(folder)
 
     with pd.ExcelWriter(f"{folder}\\{filename}") as writer:
-        for nftId in nftId_list:
+        for idx, nftId in enumerate(nftId_list):
             nft = Nft(nftId)
             orderbook = nft.get_detailed_orders(limit)
             print(orderbook)
@@ -1637,8 +1639,9 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
             df.columns = ['Price', 'Amount', 'Seller', 'Address', 'Total # For Sale', 'Owned']
             df['Price USD'] = round(df['Price'] * gs.eth_usd, 2)
             df = df[['Price', 'Price USD', 'Amount', 'Seller', 'Address', 'Total # For Sale', 'Owned']]
-            sheet_name = ''.join(x for x in nft.get_name() if (x.isalnum() or x in "._- "))[:31]
-            df.to_excel(writer, startrow=5, freeze_panes=(6,6), index=False, sheet_name=sheet_name)
+            sheet_name = str(idx+1) + " " + ''.join(x for x in nft.get_name() if (x.isalnum() or x in "._- "))[:27]
+
+            df.to_excel(writer, startrow=6, startcol=6, freeze_panes=(6,6), index=False, sheet_name=sheet_name)
             worksheet = writer.sheets[sheet_name]
             worksheet.write(0, 0, 'NFT Name')
             worksheet.write(0, 1, nft.get_name())
@@ -1651,15 +1654,18 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
             holders_sorted = sorted(nft_holders, key=lambda d: int(d['amount']), reverse=True)
             holders_df = pd.DataFrame(holders_sorted, columns=['user', 'amount', 'address', 'accountId'])
             holders_df.columns = ['User', 'Amount', 'Address', 'Account ID']
-            holders_df.to_excel(writer, startrow=5, startcol=8, freeze_panes=(6,12), index=False, sheet_name=sheet_name)
+            holders_df.to_excel(writer, startrow=6, freeze_panes=(6,12), index=False, sheet_name=sheet_name)
             worksheet.write(3, 0, '# Holders')
             worksheet.write(3, 1, num_holders)
 
 
-            for column in df:
-                column_width = max(df[column].astype(str).map(len).max(), len(column))
-                col_idx = df.columns.get_loc(column)
-                writer.sheets[sheet_name].set_column(col_idx, col_idx, column_width)
+            writer.sheets[sheet_name].set_column(0, 0, 15)
+            writer.sheets[sheet_name].set_column(1, 1, 8)
+            writer.sheets[sheet_name].set_column(2, 2, 45)
+            writer.sheets[sheet_name].set_column(3, 3, 10)
+            writer.sheets[sheet_name].set_column(9, 9, 15)
+            writer.sheets[sheet_name].set_column(10, 10, 45)
+            writer.sheets[sheet_name].set_column(11, 11, 12)
 
 def plot_eth_volume(nft_list, period = [1,7,30]):
     """
@@ -1732,8 +1738,73 @@ def get_volume_for_nft(nft_id, period, now=datetime.now()):
     return sum_list
 
 
+def plot_returns_since_mint(nftId_list, title, save_file=True):
+    db = nifty.NiftyDB()
+    date = datetime.now().strftime('%Y-%m-%d')
+    date_and_time = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+    folder = f"Mint Returns Plots\\{date}"
+    filename = f"{folder}\\{title}.png"
+
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
+    fig = go.Figure()
+    for nftId in nftId_list:
+        nft = Nft(nftId)
+        mint_price = nft.get_mint_price()
+        tx_data = db.get_nft_transactions(nft.get_nft_data())
+        df = pd.DataFrame(tx_data, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
+                          'amount', 'price', 'priceUsd'])
+        df.drop(df[df.txType != "SpotTrade"].index, inplace=True)
+        df['createdAt'] = pd.to_datetime(df['createdAt'], unit='s')
+        df['returns'] = ((df['price']-mint_price)/mint_price) * 100
+
+        fig.add_scatter(x=df.createdAt, y=df.returns, name=f"{nft.get_name()}")
+
+    fig.update_layout(title_text=f"{title} - {datetime.now().strftime('%Y-%m-%d')}",
+                      template="plotly_dark")
+    fig.update_xaxes(title_text="Date")
+    fig.update_yaxes(title_text="Returns (%)")
+    fig.show()
+
+    if save_file:
+        fig.write_image(f"{filename}", width=1600, height=1000)
 
 
+def print_single_collection_nft_owners(collectionId, filter_accountId=None):
+    """
+    Prints a list of owners for collections with multiple 1/1 NFTs
+    filter_accountId: If provided, filters out the accountId from the list (useful for removing NFTs owned by minter)
+    :param collectionId:
+    :param filter_accountId:
+    :return:
+    """
+    db = nifty.NiftyDB()
+    nft_list = db.get_nfts_in_collection(collectionId)
+
+    def find_owner(nft):
+        lr = loopring.LoopringAPI()
+        _, holder = lr.get_nft_holders(nft['nftData'], verbose=False)
+        holder[0]['nftName'] = nft['name']
+        print(f"{nft['name']} - {holder[0]['user']} ({holder[0]['accountId']}) - {holder[0]['address']}")
+        return holder[0]
+
+    owners_list = []
+    with ThreadPoolExecutor(max_workers=40) as executor:
+        for item in executor.map(find_owner, nft_list):
+            owners_list.append(item)
+
+    df = pd.DataFrame(owners_list, columns=['nftName', 'user', 'accountId', 'address', 'amount'])
+    if filter_accountId is not None:
+        df = df[df.accountId != filter_accountId]
+
+    grouped = df.groupby(['accountId', 'address', 'user'])['amount'].count()
+    sorted = grouped.sort_values(ascending=False)
+
+
+    print(sorted.to_string())
+
+    print(f"Total Unique Holders: {len(grouped.index)}")
 
 
 
@@ -1748,8 +1819,13 @@ if __name__ == "__main__":
     #print(user.get_nft_number_owned(Nft(CC_CYBER_CYCLE).get_nft_data(), use_lr=True))
 
     #lr = loopring.LoopringAPI()
-    #print(lr.filter_nft_txs(24419))
+    #print(lr.get_block(24412))
+    #collection = NftCollection("50630ce6-40f9-4f09-bfa5-b7414496dcd4")
+    #collection.get_collection_nfts()
 
+    #print(lr.filter_nft_txs(24419))
+    #print_single_collection_nft_owners("a5085ce8-ae23-4d41-b85e-cdb3ee33ebea", filter_accountId=82667)
+    #dump_detailed_orderbook_and_holders([PLS_OCEAN_CELEBRATION], "Neon Ocean Celebration Owner List")
 
     #print_user_collection_ownership(PLS_PD_LIST+PLS_PASS_LIST)
     pass
