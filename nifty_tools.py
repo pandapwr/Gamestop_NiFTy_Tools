@@ -1609,76 +1609,6 @@ def print_user_collection_ownership(nftId_list):
     print(df.to_string())
     df.to_excel('PLSTY Collection Ownership.xlsx')
 
-def print_user_collection_ownership_TH(nftId_list):
-    nf = nifty.NiftyDB()
-    lr = loopring.LoopringAPI()
-    owners_dict = {}
-
-    for nftId in nftId_list:
-        print("looking up nftId:", nftId)
-        nft = Nft(nftId)
-        _, nft_owners = lr.get_nft_holders(nft.get_nft_data())
-        for owner in nft_owners:
-            nft_dict = dict()
-            nft_dict['nftId'] = nftId
-            nft_dict['nftName'] = nft.data['name']
-            nft_dict['amount'] = owner['amount']
-            nft_dict['ownerName'] = owner['user']
-            nft_dict['accountId'] = owner['accountId']
-            dict_copy = nft_dict.copy()
-
-            if owner['address'] not in owners_dict:
-                owners_dict[owner['address']] = [dict_copy]
-            else:
-
-                owners_dict[owner['address']].append(dict_copy)
-
-    print(owners_dict)
-
-
-    final_list = []
-    for owner in owners_dict:
-        owner_string = f"{owner} ({owners_dict[owner][0]['ownerName']}): "
-        num_dr = 0
-        num_cy = 0
-        num_tr = 0
-        num_ko = 0
-        num_fh = 0
-        num_ba = 0
-        total = 0
-
-        for nft in owners_dict[owner]:
-            if nft['nftId'] == TH_DRACPNYA:
-                num_dr += int(nft['amount'])
-            elif nft['nftId'] == TH_TRYPO:
-                num_tr += int(nft['amount'])
-            elif nft['nftId'] == TH_CYPHER:
-                num_cy += int(nft['amount'])
-            elif nft['nftId'] == TH_KOSTIKA:
-                num_ko += int(nft['amount'])
-            elif nft['nftId'] == TH_FAKE_HEELS:
-                num_fh += int(nft['amount'])
-            elif nft['nftId'] == TH_BALEXX:
-                num_ba += int(nft['amount'])
-
-        total = num_ba+num_cy+num_dr+num_fh+num_ko+num_tr
-
-
-
-
-        print(owner_string)
-
-        owner_dict={'address':owner, 'username':owners_dict[owner][0]['ownerName'], 'DRACPNYA':num_dr,
-                    'TRYPO':num_tr, 'CYPHER':num_cy, 'KOSTIKA':num_ko, 'FAKE HEELS':num_fh, 'BALEXX':num_ba,
-                    'total':total}
-        final_list.append(owner_dict)
-
-    df = pd.DataFrame(final_list, columns=['address', 'username', 'DRACPNYA', 'TRYPO', 'CYPHER', 'KOSTIKA', 'FAKE HEELS', 'BALEXX', 'total',
-                                           ])
-    df.columns = ['Address', 'Username', 'DRACPNYA', 'TRYPO', 'CYPHER', 'KOSTIKA', 'FAKE HEELS', 'BALEXX', 'total']
-    print(df.to_string())
-    df.to_excel('ThedHoles Collection Ownership.xlsx')
-
 def print_detailed_orderbook(nftId, limit=None):
     nft = Nft(nftId)
     orderbook = nft.get_detailed_orders(limit)
@@ -1883,12 +1813,8 @@ def print_single_collection_nft_owners(collectionId, filter_accountId=None):
 if __name__ == "__main__":
 
     grab_new_blocks(find_new_users=False)
-    print_user_collection_ownership_TH(TH_LIST)
-    # dump_nft_holders(TH_LIST)
-
-    # plot_eth_volume(TH_LIST, [1,7,0])
     #print_users_holdings_report([91727], "91727")
-    #dump_detailed_orderbook_and_holders(PLS_LIST+PLS_PASS_LIST, "PLSTY Owner List and Orderbook", limit=3)
+    # dump_detailed_orderbook_and_holders(PLS_LIST+PLS_PASS_LIST, "PLSTY Owner List and Orderbook", limit=3)
     #find_complete_collection_owners()
     #print_user_collection_ownership([PLS_PURPLE_DREAM, PLS_PURPLE_DREAM_2, PLS_PURPLE_DREAM_3, PLS_PURPLE_DREAM_STILL, PLS_SPECIAL])
     #user = User(address="0xbe7bda8b66acb5159aaa022ab5d8e463e9fa8f7e")

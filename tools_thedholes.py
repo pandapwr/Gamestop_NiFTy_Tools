@@ -124,6 +124,9 @@ def get_holders_for_list_at_time(nft_id_list, time, name):
     """
     Take a list of nft_id, and a datetime object and calculate
     holders for that list at that time
+    Usage: Example for ThedHoles
+    time = datetime.now()-timedelta(days = 1)
+    get_holders_for_list_at_time(nft_id_list=TH_LIST, time=time, name="ThedHoles Collection Ownership")
     """
     d_list = []
     name_l = []
