@@ -1820,7 +1820,7 @@ if __name__ == "__main__":
 
     #lr = loopring.LoopringAPI()
     #print(lr.get_block(24412))
-    #collection = NftCollection("50630ce6-40f9-4f09-bfa5-b7414496dcd4")
+    #collection = NftCollection(BOOP_COLLECTION_ID)
     #collection.get_collection_nfts()
 
     #print(lr.filter_nft_txs(24419))

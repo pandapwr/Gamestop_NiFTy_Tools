@@ -154,7 +154,7 @@ class NftCollection:
             for idx, nft in enumerate(nfts):
                 data = Nft(nft['nftId'])
 
-            return self._add_datetime(response)
+            return self._add_datetime(nfts)
 
 
     def get_collection_metadata(self):
@@ -201,6 +201,8 @@ class NftCollection:
         return self.stats['forSale']
 
     def get_nftId_list(self):
+        if len(self.collection_nfts) == 0:
+            self.collection_nfts = self.get_collection_nfts()
         return [nft['nftId'] for nft in self.collection_nfts]
 
 
