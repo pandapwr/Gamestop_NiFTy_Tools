@@ -98,7 +98,6 @@ def get_holders_at_times(nftId, timestamp):
     tx = db.get_nft_transactions(nft.get_nft_data())
     df = pd.DataFrame(tx, columns=['blockId', 'createdAt', 'txType', 'nftData', 'sellerAccount', 'buyerAccount',
                                    'amount', 'price', 'priceUsd'])
-    print(df.info())
     df = df[df.createdAt < timestamp.timestamp()]
     holders = dict()
     dfs = pd.DataFrame()
@@ -120,7 +119,7 @@ def get_holders_at_times(nftId, timestamp):
 
     return [holders_purged,nft.data["name"]]
 
-def get_holders_for_list_at_time(nft_id_list, time, name):
+def get_holders_for_list_at_time(nft_id_list, time, filename):
     """
     Take a list of nft_id, and a datetime object and calculate
     holders for that list at that time
@@ -155,7 +154,7 @@ def get_holders_for_list_at_time(nft_id_list, time, name):
         # Create a new directory because it does not exist
         os.makedirs(path)
 
-    df.to_excel(path + f'{name} {timestamp}.xlsx')
+    df.to_excel(path + f'{filename} {timestamp}.xlsx')
 
 
 
@@ -164,4 +163,4 @@ if __name__ == "__main__":
 
     grab_new_blocks(find_new_users=False)
     time = datetime.now()-timedelta(days = 1)
-    get_holders_for_list_at_time(nft_id_list=TH_LIST, time=time, name="ThedHoles Collection Ownership")
+    get_holders_for_list_at_time(nft_id_list=TH_LIST, time=time, filename="ThedHoles Collection Ownership")
