@@ -1811,8 +1811,10 @@ def print_single_collection_nft_owners(collectionId, filter_accountId=None):
 
 
 if __name__ == "__main__":
+
+    grab_new_blocks(find_new_users=False)
     #print_users_holdings_report([91727], "91727")
-    #dump_detailed_orderbook_and_holders(PLS_LIST+PLS_PASS_LIST, "PLSTY Owner List and Orderbook", limit=3)
+    # dump_detailed_orderbook_and_holders(PLS_LIST+PLS_PASS_LIST, "PLSTY Owner List and Orderbook", limit=3)
     #find_complete_collection_owners()
     #print_user_collection_ownership([PLS_PURPLE_DREAM, PLS_PURPLE_DREAM_2, PLS_PURPLE_DREAM_3, PLS_PURPLE_DREAM_STILL, PLS_SPECIAL])
     #user = User(address="0xbe7bda8b66acb5159aaa022ab5d8e463e9fa8f7e")
@@ -1820,8 +1822,8 @@ if __name__ == "__main__":
 
     #lr = loopring.LoopringAPI()
     #print(lr.get_block(24412))
-    #collection = NftCollection("50630ce6-40f9-4f09-bfa5-b7414496dcd4")
-    #collection.get_collection_nfts()
+
+
 
     #print(lr.filter_nft_txs(24419))
     #print_single_collection_nft_owners("a5085ce8-ae23-4d41-b85e-cdb3ee33ebea", filter_accountId=82667)
