@@ -28,7 +28,9 @@ class LoopringAPI:
 
         api_url = f"https://api3.loopring.io/api/v3/nft/info/nftHolders?nftData={nftData}&limit=500"
         response = self.lr.get(api_url).json()
+
         total_num = response['totalNum']
+
 
         return total_num
 

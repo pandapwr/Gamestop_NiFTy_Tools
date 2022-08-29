@@ -376,6 +376,7 @@ class Nft:
 
         # Remove any order where the seller no longer owns the NFT, and append total for sale for each seller
         orderbook_purged = []
+
         for order in orders:
             if order['numOwned'] == 0:
                 continue
