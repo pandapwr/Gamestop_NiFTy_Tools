@@ -188,7 +188,7 @@ class NiftyDB:
         result = self.c.fetchone()
         if result is None:
             print(f"No historical price data found for {currency} at {timestamp}")
-            return None
+            return 1
         else:
             return result['price']
 
