@@ -70,7 +70,7 @@ def print_user_collection_ownership_TH(nftId_list):
     df.to_excel('ThedHoles Collection Ownership.xlsx')
 
 
-def get_holders_at_times(nftId, timestamp):
+def get_holders_at_time_for_nft(nftId, timestamp):
     db = nifty.NiftyDB()
 
     nft = Nft(nftId)
@@ -111,7 +111,7 @@ def get_holders_for_list_at_time(nft_id_list, time, filename="none", export_to_e
     name_l = []
 
     for nftId in nft_id_list:
-        dict, name = get_holders_at_times(nftId, time)
+        dict, name = get_holders_at_time_for_nft(nftId, time)
         name_l.append(name)
         d_list.append(dict)
     df = pd.DataFrame(d_list)
