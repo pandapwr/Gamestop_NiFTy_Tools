@@ -1,6 +1,7 @@
 from nifty_tools import *
 import plotly.express as px
 
+
 def print_user_collection_ownership_TH(nftId_list):
     nf = nifty.NiftyDB()
     lr = loopring.LoopringAPI()
@@ -27,6 +28,7 @@ def print_user_collection_ownership_TH(nftId_list):
 
     print(owners_dict)
 
+
     final_list = []
     for owner in owners_dict:
         owner_string = f"{owner} ({owners_dict[owner][0]['ownerName']}): "
@@ -52,6 +54,7 @@ def print_user_collection_ownership_TH(nftId_list):
             elif nft['nftId'] == TH_BALEXX:
                 num_ba += int(nft['amount'])
 
+
         total = num_ba + num_cy + num_dr + num_fh + num_ko + num_tr
 
         print(owner_string)
@@ -65,12 +68,14 @@ def print_user_collection_ownership_TH(nftId_list):
                       columns=['address', 'username', 'DRACPNYA', 'TRYPO', 'CYPHER', 'KOSTIKA', 'FAKE HEELS', 'BALEXX',
                                'total',
                                ])
+
     df.columns = ['Address', 'Username', 'DRACPNYA', 'TRYPO', 'CYPHER', 'KOSTIKA', 'FAKE HEELS', 'BALEXX', 'total']
     print(df.to_string())
     df.to_excel('ThedHoles Collection Ownership.xlsx')
 
 
 def get_holders_at_time_for_nft(nftId, timestamp):
+
     db = nifty.NiftyDB()
 
     nft = Nft(nftId)
@@ -81,9 +86,11 @@ def get_holders_at_time_for_nft(nftId, timestamp):
     holders = dict()
     dfs = pd.DataFrame()
     # Go through tx and save holder balances
+
     i = 0
     for idx, tx in df.iterrows():
         i += 1
+
         if tx['buyerAccount'] not in holders:
             holders[tx['buyerAccount']] = tx['amount']
         else:
@@ -96,10 +103,12 @@ def get_holders_at_time_for_nft(nftId, timestamp):
         # Remove holders with 0 balance
         holders_purged = {k: v for k, v in holders.items() if v > 0}
 
+
     return [holders_purged, nft.data["name"]]
 
 
 def get_holders_for_list_at_time(nft_id_list, time, filename="none", export_to_excel=True, get_df=False):
+
     """
     Take a list of nft_id, and a datetime object and calculate
     holders for that list at that time
@@ -111,21 +120,26 @@ def get_holders_for_list_at_time(nft_id_list, time, filename="none", export_to_e
     name_l = []
 
     for nftId in nft_id_list:
+
         dict, name = get_holders_at_time_for_nft(nftId, time)
+
         name_l.append(name)
         d_list.append(dict)
     df = pd.DataFrame(d_list)
     df = df.T
+
     df.columns = name_l
     df.fillna(0, inplace=True)
     df['Sum'] = df.sum(axis=1)
     df.insert(0, 'address', "")
     df.insert(1, 'username', "")
 
+
     for idx, row in df.iterrows():
         user = User(accountId=idx)
         df.at[idx, 'address'] = user.address
         df.at[idx, 'username'] = user.username
+
     df.sort_values(by=['Sum'], ascending=False, inplace=True)
     timestamp = time.strftime("%Y-%m-%d %H-%M")
     date = time.strftime("%Y-%m-%d")
@@ -195,3 +209,4 @@ if __name__ == "__main__":
     plot_eth_volume(TH_LIST)
     for e in TH_LIST:
         plot_price_history(e)
+
