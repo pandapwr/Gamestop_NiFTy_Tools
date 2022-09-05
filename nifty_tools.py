@@ -16,57 +16,23 @@ import discord_api as discord
 from gamestop_api import User, Nft, NftCollection, GamestopApi
 from coinbase_api import CoinbaseAPI
 from nft_ids import *
+from collection_tools.plsty_tools import *
 
 import nifty_database as nifty
 
 
-CC_CHROME_CANNON = "01eb2193-81d8-4546-9a40-da3f317341c7"
-CC_CLONE_CARD = "7bebfd17-005e-4fca-b9bb-08dacba8677e"
-CC_CAN_D = "52a47d6c-5fc0-42fe-a7aa-38a4cb4a99cd"
-CC_CLONE = "a0e4d94f-13cf-4c78-8014-5e95071110ff"
-CC_10_WORLDS = "d43ed539-1ba8-40ac-a05e-da566f0d1cc9"
-CC_CYBER_CYCLE = "91994321-dcaf-44e6-88df-2f6dad3df801"
-CC_LOADING_LEVEL = "bb2199e0-c614-460c-ba95-54593eb8caff"
-CC_CLONE_CENTER = "15a15703-a3ed-4768-8d7a-5931025294ed"
-
-
-CC_RED_CUPCAKE = "0x1d608bd077b05370d534e76d694b256c52ae8e53b36f2aa6110945a52243b011"
-CC_MILK = "0x07bf8d4ec2aeb66b3df9535e0c5cff1510e07440dfbb5228e7b3ef07fbf8a37b"
-CC_BLUE_CUPCAKE = "0x0184bd12f853f67f20ff2a555af2f1a5a24536985f8077b4e27822bc827eb3cf"
-CC_FACTORY = "0x22385936e403173cc0a2a62b1e96caa296930432c893a961db1f2621733fd651"
-CC_ORANGE_CUPCAKE = "0x0f8ee4599868e30ca01db1dbe4c168620a2745c6f3cecb056dc38f47c59233fb"
-
-MB_ASTROBOY = "47400769-a0e8-4763-8f42-82e3566ff512"
-
-
-CC_NFTID_LIST = [CC_10_WORLDS, CC_CHROME_CANNON, CC_CLONE_CARD, CC_CAN_D, CC_CLONE, CC_CYBER_CYCLE, CC_LOADING_LEVEL,
-                 CC_CLONE_CENTER]
-
-CC_NFTDATA = ["0x20c7f321f7d800f38f3fb62fd89cbfc28072feea226c0bc9bde0efc2ce008f01",
-              "0x27665297fab3c72a472f81e6a734ffe81c8c1940a82164aca76476ca2b506724",
-              "0x230d40e35852948fe84d3a4077aefb3c1ae11297b94a55bafc9c8fc1793585ca",
-              "0x2c4b4edd628bcffffbf4a9d434ce83e4737889b65eee922f00d3c2b2d82b3394",
-              "0x057047417d4aaf63a083ed0b379d8b8d44f7a9edf6252dced73be6147928eaaf",
-              "0x0d1a4f4d19f4aaaaf01cfc1eee2c24294653ab376fb0daf319ae6fdb2063c4a3",
-              "0x09eb5d265456b098fa29ca27a63da34a3756d888838cbc8f17e4ccda256adcd3",
-              "0x19562143481eeeea9051659e5a1aaf683cf71b09c522c71adebb827c20285100"]
-
-PT_STUDY = "4a0155d9-501e-477d-868c-c81d22d88ec2"
-PT_SEARCH = "6882580c-3336-44da-b6f1-225d7df71b3f"
-PT_DISCOVER = "8fc72668-c553-4c3e-a660-eed928ae5f40"
-PT_SURVEY = "eb2cab68-2ee6-42e1-b513-74fb632f8462"
-PT_SIGNAL = "6bdbf3cb-8df8-488c-b4a3-f74ca523a528"
-PT_TRANSFORM = "ba66f379-7f8e-4071-8667-471ceaacb018"
-
-MB_MONKEY = "dac8c208-e386-4b1f-8003-b43dbde3dc3f"
-MB_FROGGI = "7b75e90b-47e0-4b38-8dfc-61feab3a9429"
-MB_ASTRONAUT = "47400769-a0e8-4763-8f42-82e3566ff512"
-MB_ROCKSTAR = "b0d4b56d-86cf-41af-ae4e-1689f1681c1b"
-MB_REPORTER = "0755529b-60a1-4432-a129-8079bd83868d"
-MB_ADAM = "64af3bd4-f0e7-4cce-b05f-cd2a438644b2"
-MB_LIST = [MB_MONKEY, MB_FROGGI, MB_ASTRONAUT, MB_ROCKSTAR, MB_REPORTER, MB_ADAM]
-
-
+plotly_title_font = dict(
+    color="White",
+    size=36
+)
+plotly_axis_font = dict(
+    color="White",
+    size=22
+)
+plotly_tick_font = dict(
+    color="White",
+    size=18
+)
 
 
 def save_nft_holders(nft_id=None, nftData=None):
@@ -278,42 +244,50 @@ def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=Fa
     if plot_floor_price:
         floor_df = get_floor_price_history(nft_id)
 
+    volume = df.resample('30min', on='createdAt').amount.sum().to_frame()
+    if limit_volume and volume.amount.max() > 40:
+        limit = (round(np.percentile(volume.amount, 99) / 10) * 10)
+        volume.loc[volume['amount'] > limit, 'amount'] = limit
+
     fig = go.Figure()
-    if bg_img:
-        bg_img = Image.open(f'images\\{bg_img}.png')
-        fig.add_layout_image(
-            dict(
-                source=bg_img,
-                xref="x",
-                yref="y",
-                x=0,
-                y=3,
-                sizex=2,
-                sizey=2,
-                sizing="stretch",
-                opacity=0.5,
-                layer="below")
-        )
+
+
+
 
     fig.add_trace(go.Scatter(x=df.createdAt, y=df.price, name='Price (ETH)', mode='lines+markers',
                              marker=dict(opacity=0.5)))
     fig.add_trace(go.Scatter(x=df.createdAt, y=df.priceUsd, name='Price (USD)', mode='lines+markers',
                              marker=dict(opacity=0.5), yaxis="y2"))
+    fig.add_trace(
+        go.Bar(x=volume.index, y=volume.amount, name='Volume', texttemplate="%{value}", opacity=0.7, textangle=0,
+               yaxis="y3"))
     if plot_floor_price:
         fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price, name='Floor Price', ))
         fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price_usd, name='Floor Price USD', yaxis="y2"))
 
-    volume = df.resample('30min', on='createdAt').amount.sum().to_frame()
-    if limit_volume and volume.amount.max() > 40:
-        limit = (round(np.percentile(volume.amount, 99)/10)*10)
-        volume.loc[volume['amount'] > limit, 'amount'] = limit
-    fig.add_trace(
-        go.Bar(x=volume.index, y=volume.amount, name='Volume', texttemplate="%{value}", opacity=0.4, textangle=0, yaxis="y3"))
+    if bg_img:
+        bg_img = Image.open(f'images\\{bg_img}.png')
+        fig.add_layout_image(
+            dict(
+                source=bg_img,
+                xref="paper",
+                yref="paper",
+                x=0.3,
+                y=1,
+                sizex=1,
+                sizey=1,
+                sizing="contain",
+                opacity=0.2,
+                layer="below")
+        )
 
-    fig.update_layout(xaxis=dict(domain=[0, 0.95]), yaxis=dict(title="Price", side="right", position=0.95),
-                      yaxis2=dict(title="Price USD", overlaying="y", side="right", position=1),
-                      yaxis3=dict(title="Volume", overlaying="y"),
-                      font=dict(size=14),
+    fig.update_layout(xaxis=dict(domain=[0, 0.90], titlefont=plotly_axis_font, tickfont=plotly_axis_font),
+                      yaxis=dict(title="Price (ETH)", side="right", position=0.90,
+                                                               titlefont=plotly_axis_font, tickfont=plotly_tick_font),
+                      yaxis2=dict(title="Price (USD)", overlaying="y", side="right", position=0.95,
+                                  titlefont=plotly_axis_font, tickfont=plotly_tick_font),
+                      yaxis3=dict(title="Volume", overlaying="y", titlefont=plotly_axis_font, tickfont=plotly_tick_font),
+                      title_font=plotly_title_font,
                       title_text=f"{nft_data['name']} Price History - {datetime.now().strftime('%Y-%m-%d')}",
                       template="plotly_dark")
 
@@ -386,35 +360,6 @@ def find_complete_owners(nftId_list):
 
     print(f"\nTotal Unique Complete Collection Owners: {len(complete_owners_list)}")
     print(f"Total number of complete sets: {total_complete_sets}")
-
-
-
-def find_complete_plsty_owners():
-    PLSTY_NFTDATA = ["0x158d8f800054785b08a629c8df0e25c8218b0fb72aadda6f7ee158598b8a82ce",
-                     "0x09dec41f15883293afe0cce5167a6e47cdf3965d350e476c4a9e834afee31459",
-                     "0x2703bd802356953d2759be8a22a973b034eae9646b971c672b9c7649f9734fac",
-                     "0x045f0ed1a09bb89e80e2200a2ac3b65592e000c287a2b7c4adb91161ca043ba1",
-                     "0x0abeb97dbdfd3b3fc842fa43a6c9619f10ad6510fbbcd0e91e7425733e3296d9"]
-    lr = loopring.LoopringAPI()
-    _, owners = lr.get_nft_holders("0x0abeb97dbdfd3b3fc842fa43a6c9619f10ad6510fbbcd0e91e7425733e3296d9")
-    num_complete_owners = 0
-    num_backstage = 0
-    for owner in owners:
-        owned = User(owner['user']).get_owned_nfts_lr()
-        num_owned = 0
-        still_owned = 0
-        for nft in owned:
-            if nft['nftData'] == "0x045f0ed1a09bb89e80e2200a2ac3b65592e000c287a2b7c4adb91161ca043ba1":
-                still_owned = 1
-            if any(nft['nftData'] == x for x in PLSTY_NFTDATA):
-                num_owned += 1
-        if still_owned >= 1 and num_owned >= 3:
-            num_backstage += 1
-        if num_owned == 5:
-            num_complete_owners += 1
-            print(f"{owner['user']} owns {num_owned}/5 PLS&TY")
-    print(f"Total Number of Complete PLS&TY Owners: {num_complete_owners}")
-    print(f"Total Number of Backstage Passes (3/5 or more): {num_backstage}")
 
 
 def find_complete_collection_owners():
@@ -1183,7 +1128,8 @@ def calculate_holder_stats(nftId, end_timestamp=None, calculate_average=True):
         holders_dict = get_holders_at_time(nftId, end_timestamp)
         holders = []
         for idx, account in enumerate(holders_dict):
-            holders.append({'accountId': list(holders_dict.keys())[idx], 'amount': list(holders_dict.values())[idx]})
+            if account not in (182395, 92477, 182411, 182398, 177969, 38482):
+                holders.append({'accountId': list(holders_dict.keys())[idx], 'amount': list(holders_dict.values())[idx]})
         num_holders = len(holders_dict)
 
     # Calculate average hold time
@@ -1528,86 +1474,6 @@ def plot_items_per_wallet(NFT_list):
     fig.update_yaxes(title_text="Per wallet")
     fig.show()
 
-def print_user_collection_ownership(nftId_list):
-    nf = nifty.NiftyDB()
-    lr = loopring.LoopringAPI()
-    owners_dict = {}
-
-    for nftId in nftId_list:
-        print("looking up nftId:", nftId)
-        nft = Nft(nftId)
-        _, nft_owners = lr.get_nft_holders(nft.get_nft_data())
-        for owner in nft_owners:
-            nft_dict = dict()
-            nft_dict['nftId'] = nftId
-            nft_dict['nftName'] = nft.data['name']
-            nft_dict['amount'] = owner['amount']
-            nft_dict['ownerName'] = owner['user']
-            nft_dict['accountId'] = owner['accountId']
-            dict_copy = nft_dict.copy()
-
-            if owner['address'] not in owners_dict:
-                owners_dict[owner['address']] = [dict_copy]
-            else:
-
-                owners_dict[owner['address']].append(dict_copy)
-
-    print(owners_dict)
-
-
-    final_list = []
-    for owner in owners_dict:
-        owner_string = f"{owner} ({owners_dict[owner][0]['ownerName']}): "
-        num_still = 0
-        num_pd1 = 0
-        num_pd2 = 0
-        num_pd3 = 0
-        num_se = 0
-        num_complete_sets = 0
-        num_pass_blue = 0
-        num_pass_green = 0
-        num_pass_pink = 0
-
-        for nft in owners_dict[owner]:
-            if nft['nftId'] == PLS_PURPLE_DREAM:
-                num_pd1 += int(nft['amount'])
-            elif nft['nftId'] == PLS_PURPLE_DREAM_2:
-                num_pd2 += int(nft['amount'])
-            elif nft['nftId'] == PLS_PURPLE_DREAM_3:
-                num_pd3 += int(nft['amount'])
-            elif nft['nftId'] == PLS_PURPLE_DREAM_STILL:
-                num_still += int(nft['amount'])
-            elif nft['nftId'] == PLS_PURPLE_DREAM_SPECIAL:
-                num_se += int(nft['amount'])
-            elif nft['nftId'] == PLS_PASS_GREEN:
-                num_pass_green += int(nft['amount'])
-            elif nft['nftId'] == PLS_PASS_PINK:
-                num_pass_pink += int(nft['amount'])
-            elif nft['nftId'] == PLS_PASS_BLUE:
-                num_pass_blue += int(nft['amount'])
-
-
-        num_still_se = min([num_still, num_se])
-        num_pd13 = min([num_pd1, num_pd2, num_pd3])
-
-        num_3of5 = min([num_still_se, num_pd13])
-        num_complete_sets = min([num_pd1, num_pd2, num_pd3, num_still, num_se])
-
-        owner_string += f"{num_3of5}x 3/5, {num_complete_sets}x 5/5 \t"
-        owner_string += f"{num_still}x Still, {num_se}x Special, {num_pd1}x PD1, {num_pd2}x PD2, {num_pd3}x PD3"
-
-        print(owner_string)
-
-        owner_dict={'address':owner, 'username':owners_dict[owner][0]['ownerName'], '3of5':num_3of5,
-                    '5of5':num_complete_sets, 'still':num_still, 'special':num_se, 'pd1':num_pd1, 'pd2':num_pd2,
-                    'pd3':num_pd3, 'pass_blue':num_pass_blue, 'pass_green':num_pass_green, 'pass_pink':num_pass_pink}
-        final_list.append(owner_dict)
-
-    df = pd.DataFrame(final_list, columns=['address', 'username', '3of5', '5of5', 'still', 'special', 'pd1', 'pd2', 'pd3',
-                                           'pass_blue', 'pass_green', 'pass_pink'])
-    df.columns = ['Address', 'Username', '3 of 5 Sets', '5 of 5 Sets', 'Still', 'Special', 'PD1', 'PD2', 'PD3', 'Blue Pass', 'Green Pass', 'Pink Pass']
-    print(df.to_string())
-    df.to_excel('PLSTY Collection Ownership.xlsx')
 
 def print_detailed_orderbook(nftId, limit=None):
     nft = Nft(nftId)
@@ -1631,6 +1497,7 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
         os.makedirs(folder)
 
     with pd.ExcelWriter(f"{folder}\\{filename}") as writer:
+
         for idx, nftId in enumerate(nftId_list):
             nft = Nft(nftId)
             orderbook = nft.get_detailed_orders(limit)
@@ -1641,7 +1508,7 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
             df = df[['Price', 'Price USD', 'Amount', 'Seller', 'Address', 'Total # For Sale', 'Owned']]
             sheet_name = str(idx+1) + " " + ''.join(x for x in nft.get_name() if (x.isalnum() or x in "._- "))[:27]
 
-            df.to_excel(writer, startrow=6, startcol=6, freeze_panes=(6,6), index=False, sheet_name=sheet_name)
+            df.to_excel(writer, startrow=6, startcol=6, freeze_panes=(7,6), index=False, sheet_name=sheet_name)
             worksheet = writer.sheets[sheet_name]
             worksheet.write(0, 0, 'NFT Name')
             worksheet.write(0, 1, nft.get_name())
@@ -1654,9 +1521,11 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
             holders_sorted = sorted(nft_holders, key=lambda d: int(d['amount']), reverse=True)
             holders_df = pd.DataFrame(holders_sorted, columns=['user', 'amount', 'address', 'accountId'])
             holders_df.columns = ['User', 'Amount', 'Address', 'Account ID']
-            holders_df.to_excel(writer, startrow=6, freeze_panes=(6,12), index=False, sheet_name=sheet_name)
+            holders_df.to_excel(writer, startrow=6, freeze_panes=(7,12), index=False, sheet_name=sheet_name)
             worksheet.write(3, 0, '# Holders')
             worksheet.write(3, 1, num_holders)
+            worksheet.write(5, 2, 'Wallets Holding')
+            worksheet.write(5, 10, 'Wallets Selling')
 
 
             writer.sheets[sheet_name].set_column(0, 0, 15)
@@ -1771,7 +1640,7 @@ def plot_returns_since_mint(nftId_list, title, save_file=True):
         fig.write_image(f"{filename}", width=1600, height=1000)
 
 
-def print_single_collection_nft_owners(collectionId, filter_accountId=None):
+def print_1of1_collection_nft_owners(collectionId, filter_accountId=None):
     """
     Prints a list of owners for collections with multiple 1/1 NFTs
     filter_accountId: If provided, filters out the accountId from the list (useful for removing NFTs owned by minter)
@@ -1819,6 +1688,7 @@ if __name__ == "__main__":
     #print(user.get_nft_number_owned(Nft(CC_CYBER_CYCLE).get_nft_data(), use_lr=True))
 
     #lr = loopring.LoopringAPI()
+    #print(lr.get_pending(transfers=False, mints=False))
     #print(lr.get_block(24412))
     #collection = NftCollection(BOOP_COLLECTION_ID)
     #collection.get_collection_nfts()
@@ -1828,4 +1698,7 @@ if __name__ == "__main__":
     #dump_detailed_orderbook_and_holders([PLS_OCEAN_CELEBRATION], "Neon Ocean Celebration Owner List")
 
     #print_user_collection_ownership(PLS_PD_LIST+PLS_PASS_LIST)
+    print_plsty_collection_ownership()
+    #find_complete_owners(CC_LIST+CC_CLAW_LIST+CC_CELEBRATION_LIST)
+
     pass

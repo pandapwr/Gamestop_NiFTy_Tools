@@ -81,12 +81,15 @@ class GamestopApi:
 
 
 class NftCollection:
-    def __init__(self, collectionID):
+    def __init__(self, collectionID, get_collection_nfts=False):
         self.headers = API_HEADERS
         self.collectionID = collectionID
         self.stats = self.get_collection_stats()
         self.metadata = self.get_collection_metadata()
-        self.collection_nfts = []
+        if get_collection_nfts:
+            self.collection_nfts = self.get_collection_nfts(get_all=True)
+        else:
+            self.collection_nfts = None
 
     def _add_datetime(self, data):
 
@@ -153,6 +156,8 @@ class NftCollection:
             print(f"Retrieved {len(nfts)} NFTs in {self.metadata['name']}")
             for idx, nft in enumerate(nfts):
                 data = Nft(nft['nftId'])
+
+            self.collection_nfts = self._add_datetime(nfts)
 
             return self._add_datetime(nfts)
 
