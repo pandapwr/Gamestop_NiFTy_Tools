@@ -5,6 +5,7 @@ import loopring_api as loopring
 from concurrent.futures import ThreadPoolExecutor
 import nifty_database as nifty
 import time
+import traceback
 
 API_HEADERS = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
@@ -39,12 +40,12 @@ class GamestopApi:
     def get_newest_collections(self, limit=48):
         return self.get_collections(limit=limit, offset=0, sort="created", sort_order="desc")
 
-    def get_collections(self, get_all=True, limit=0, offset=0, sort="created", sort_order="asc"):
+    def get_collections(self, get_all=True, limit=500, offset=0, sort="created", sort_order="asc"):
         if get_all:
             api_url = "https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionsPaginated?limit=0&sortBy=random"
             response = requests.get(api_url, headers=self.headers)
             if response.status_code == 200:
-                total_num = response.json()['data']['totalNum']
+                total_num = response.json()['totalNum']
             else:
                 return None
 
@@ -61,8 +62,8 @@ class GamestopApi:
                 else:
                     return None
 
-                collections_list = self._add_datetime(collections_list)
-                return collections_list
+            collections_list = self._add_datetime(collections_list)
+            return collections_list
 
         else:
             api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionsPaginated?"
@@ -75,6 +76,44 @@ class GamestopApi:
             else:
                 return None
 
+    def save_collections(self):
+        db = nifty.NiftyDB()
+        collections = self.get_collections()
+        if collections is not None:
+            for collection in collections:
+                if db.get_collection(collection['collectionId']) is None:
+                    api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionStats?collectionId={collection['collectionId']}"
+                    response = requests.get(api_url).json()
+                    numNfts = response['itemCount']
+
+                    print(f"Adding {collection['name']} ({collection['collectionId']}) to database")
+                    if collection['bannerUri'] is None:
+                        bannerUri = ""
+                    else:
+                        bannerUri = f"https://static.gstop-content.com/{collection['bannerUri'][7:]}"
+
+                    if collection['avatarUri'] is None:
+                        avatarUri = ""
+                    else:
+                        avatarUri = f"https://static.gstop-content.com/{collection['avatarUri'][7:]}"
+
+                    if collection['tileUri'] is None:
+                        tileUri = ""
+                    else:
+                        tileUri = f"https://static.gstop-content.com/{collection['tileUri'][7:]}"
+                    db.insert_collection(collection['collectionId'],
+                                         collection['name'],
+                                         collection['slug'],
+                                         collection['creator']['displayName'],
+                                         collection['description'],
+                                         bannerUri,
+                                         avatarUri,
+                                         tileUri,
+                                         int(collection['createdAt'].timestamp()),
+                                         numNfts,
+                                         collection['layer'])
+        else:
+            return False
 
     def usd(self, value):
         return value * self.eth_usd
@@ -120,7 +159,7 @@ class NftCollection:
 
         return response
 
-    def get_collection_nfts(self, get_all=True, limit=48, offset=0, sort="created", sort_order="asc"):
+    def get_collection_nfts(self, get_all=True, limit=500, offset=0, sort="created", sort_order="desc"):
 
         # Get the total number of items in the collection
         api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftsPaginated?"
@@ -156,6 +195,7 @@ class NftCollection:
             print(f"Retrieved {len(nfts)} NFTs in {self.metadata['name']}")
             for idx, nft in enumerate(nfts):
                 data = Nft(nft['nftId'])
+                print(f"Retrieved NFT {idx+1} of {len(nfts)}: {data.get_name()}")
 
             self.collection_nfts = self._add_datetime(nfts)
 
@@ -163,10 +203,14 @@ class NftCollection:
 
 
     def get_collection_metadata(self):
-        api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionMetadata?"
-                   f"collectionId={self.collectionID}")
-        response = requests.get(api_url, headers=self.headers).json()
-        return response
+        try:
+            api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionMetadata?"
+                       f"collectionId={self.collectionID}")
+            response = requests.get(api_url, headers=self.headers).json()
+            return response
+        except Exception as e:
+            print(traceback.format_exc())
+            print(f"Error retrieving metadata for {self.collectionID}: {e}")
 
     '''
     Functions for returning collection information
@@ -296,9 +340,14 @@ class Nft:
                 response['updatedAt'] = time.mktime(response['updatedAt'].timetuple())
                 response['firstMintedAt'] = time.mktime(response['firstMintedAt'].timetuple())
                 thumbnailUrl = f"https://www.gstop-content.com/ipfs/{response['mediaThumbnailUri'][7:]}"
+                print(response['metadataJson']['attributes'])
+                if 'metadataJson' in response and 'attributes' in response['metadataJson']:
+                    attributes = json.dumps(response['metadataJson']['attributes'])
+                else:
+                    attributes = json.dumps({})
                 db.insert_nft(response['nftId'], response['loopringNftInfo']['nftData'][0], response['tokenId'],
                               response['contractAddress'], response['creatorEthAddress'], response['metadataJson']['name'],
-                              response['amount'], json.dumps(response['metadataJson']['properties']), response['collectionId'],
+                              response['amount'], attributes, response['collectionId'],
                               response['createdAt'], response['firstMintedAt'], response['updatedAt'], thumbnailUrl, 0)
                 db.close()
                 return response
@@ -536,6 +585,12 @@ class Nft:
         else:
             return self.data['loopringNftInfo']['nftData'][0]
 
+    def get_thumbnail(self):
+        if self.from_db:
+            return self.data['thumbnailUrl']
+        else:
+            return f"https://www.gstop-content.com/ipfs/{self.data['mediaThumbnailUri'][7:]}"
+
     def get_minted_datetime(self):
         return self.data['firstMintedAt']
 
@@ -596,6 +651,9 @@ class User:
                 self.get_user_profile(username=username, updateDb=True, check_new_name=check_new_name)
             elif address is not None:
                 self.get_user_profile(address=address, updateDb=True, check_new_name=check_new_name)
+            elif accountId is not None:
+                address = self.lr.get_user_address(accountId)
+                self.get_user_profile(address=address, updateDb=True, check_new_name=check_new_name)
 
         if get_collections:
             self.number_of_collections = self.get_created_collections()
@@ -640,7 +698,7 @@ class User:
                 self.db.update_username(accountId=self.accountId, username=self.username)
         else:
             if updateDb:
-                self.db.insert_user_info(accountId=self.accountId, address=self.address, username=self.username)
+                self.db.insert_user_info(accountId=self.accountId, address=self.address, username=self.username, discord_username=None)
 
         return
 

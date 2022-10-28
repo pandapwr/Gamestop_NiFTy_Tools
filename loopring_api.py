@@ -23,6 +23,11 @@ class LoopringAPI:
             'X-API-KEY': self.api_keys[randint(0, number_of_keys)]
         })
 
+    def get_lrc_price(self):
+        api_url = "https://api3.loopring.io/api/v3/ticker?market=LRC-USDT"
+        response = self.lr.get(api_url).json()
+        return float(response['tickers'][0][7])
+
     def get_num_nft_holders(self, nftData):
         total_num = 0
 
@@ -207,4 +212,7 @@ class LoopringAPI:
             print(f"Saved block {blockData['blockId']} to database")
 
         db.close()
+
+    def get_nft_transfer_fees(self, token):
+        api_url = f"https://api3.loopring.io/api/v3/user/offchainFee?accountId=0&requestType=11&tokenSymbol=LRC"
 

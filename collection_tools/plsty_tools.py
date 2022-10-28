@@ -52,6 +52,10 @@ def print_plsty_collection_ownership():
         num_no_complete_sets = 0
         num_decoded = 0
         num_chromatic = 0
+        num_fly = 0
+        num_finale_day = 0
+        num_finale_sunset = 0
+        num_finale_night = 0
 
         for nft in owners_dict[owner]:
             if nft['nftId'] == PLS_PURPLE_DREAM:
@@ -90,6 +94,15 @@ def print_plsty_collection_ownership():
                 num_decoded += int(nft['amount'])
             elif nft['nftId'] == PLS_CHROMATIC:
                 num_chromatic += int(nft['amount'])
+            elif nft['nftId'] == PLS_FLY:
+                num_fly += int(nft['amount'])
+            elif nft['nftId'] == PLS_FINALE_DAY:
+                num_finale_day += int(nft['amount'])
+            elif nft['nftId'] == PLS_FINALE_SUNSET:
+                num_finale_sunset += int(nft['amount'])
+            elif nft['nftId'] == PLS_FINALE_NIGHT:
+                num_finale_night += int(nft['amount'])
+
 
 
         num_pd_still_se = min([num_pd_still, num_pd_se])
@@ -107,6 +120,21 @@ def print_plsty_collection_ownership():
         num_no_3of5 = min([num_no_still_se, num_no_13_total])
         num_no_complete_sets = min([num_no1, num_no2, num_no3, num_no_still, num_no_se])
 
+        num_finale_sets = min([num_finale_day, num_finale_sunset, num_finale_night])
+
+        num_final_qualifying = 0
+        if num_pd_complete_sets > 0:
+            num_final_qualifying += 1
+        if num_no_complete_sets > 0:
+            num_final_qualifying += 1
+        if num_decoded > 0:
+            num_final_qualifying += 1
+        if num_fly > 0:
+            num_final_qualifying += 1
+        if num_finale_sets > 0:
+            num_final_qualifying += 1
+
+
 
         owner_string += f"{num_pd_3of5}x 3/5 PD, {num_pd_complete_sets}x 5/5 PD\t"
         owner_string += f"{num_pd_still}x Still, {num_pd_se}x Special, {num_pd1}x PD1, {num_pd2}x PD2, {num_pd3}x PD3\t"
@@ -122,15 +150,16 @@ def print_plsty_collection_ownership():
                     'pd3':num_pd3, 'pass_blue':num_pass_blue, 'pass_green':num_pass_green, 'pass_pink':num_pass_pink,
                     'initiating':num_initiating, 'countdown':num_countdown, 'adieu':num_adieu, '33_3of3':num_33_3of3,
                     'no_3of5':num_no_3of5, 'no_5of5':num_no_complete_sets, 'no_still':num_no_still, 'no_special':num_no_se,
-                    'no_pd1':num_no1, 'no_pd2':num_no2, 'no_pd3':num_no3, 'decoded':num_decoded, 'chromatic':num_chromatic}
+                    'no_pd1':num_no1, 'no_pd2':num_no2, 'no_pd3':num_no3, 'decoded':num_decoded, 'chromatic':num_chromatic,
+                    'fly':num_fly, 'num_finale':num_finale_sets, 'final_qualifying':num_final_qualifying}
         final_list.append(owner_dict)
 
     df = pd.DataFrame(final_list, columns=['address', 'username', '3of5', '5of5', 'still', 'special', 'pd1', 'pd2', 'pd3',
                                            'pass_blue', 'pass_green', 'pass_pink', 'initiating', 'countdown', 'adieu', '33_3of3',
-                                           'no_3of5', 'no_5of5', 'no_still', 'no_special', 'no_pd1', 'no_pd2', 'no_pd3', 'decoded', 'chromatic'])
+                                           'no_3of5', 'no_5of5', 'no_still', 'no_special', 'no_pd1', 'no_pd2', 'no_pd3', 'decoded', 'chromatic', 'fly', 'num_finale', 'final_qualifying'])
     df.columns = ['Address', 'Username', '3/5 PD Sets', '5/5 PD Sets', 'Still', 'Special', 'PD1', 'PD2', 'PD3',
                   'Blue Pass', 'Green Pass', 'Pink Pass', 'Initiating', 'Countdown', 'Adieu', '3/3 of 33 Sets',
-                  '3/5 NO', '5/5 NO', 'Still NO', 'Special NO', 'NO1', 'NO2', 'NO3', 'Decoded', 'Chromatic']
+                  '3/5 NO', '5/5 NO', 'Still NO', 'Special NO', 'NO1', 'NO2', 'NO3', 'Decoded', 'Chromatic', 'Fly', '3/3 Finale', 'Final Qualifying']
 
     date = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
 

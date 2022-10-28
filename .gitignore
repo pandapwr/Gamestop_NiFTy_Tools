@@ -1,1 +1,13 @@
 *.pyc
+/.idea
+/__pycache__
+/"Complete Collection Owners"
+/cumulative_volume_charts
+/Detailed_Orderbooks
+/Discord_Charts
+/holder_charts
+/Loopygen
+/NFT_Holders
+/NFT_Owners_Holdings
+/OG
+/price_history_charts

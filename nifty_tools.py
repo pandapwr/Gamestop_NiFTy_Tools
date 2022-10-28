@@ -7,7 +7,7 @@ import numpy as np
 from plotly.subplots import make_subplots
 from PIL import Image
 import networkx as nx
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from xlsxwriter import Workbook
 
 import gamestop_api
@@ -17,6 +17,10 @@ from gamestop_api import User, Nft, NftCollection, GamestopApi
 from coinbase_api import CoinbaseAPI
 from nft_ids import *
 from collection_tools.plsty_tools import *
+from collection_tools.cybercrew_tools import *
+from collection_tools.loopingu_tools import *
+from scanner_config import *
+
 
 import nifty_database as nifty
 
@@ -188,12 +192,14 @@ def grab_new_blocks(find_missing=False, find_new_users=True):
     update_historical_crypto_data('LRC')
     lr = loopring.LoopringAPI()
     nf = nifty.NiftyDB()
+    gs = GamestopApi()
     last_block = nf.get_latest_saved_block()
     if last_block is None:
         last_block = 24340
     if find_missing:
         last_block = 24340
     i = 1
+
     while True:
         print(f"Retrieving block {last_block + i}")
         if nf.check_if_block_exists(last_block + i):
@@ -213,6 +219,31 @@ def grab_new_blocks(find_missing=False, find_new_users=True):
     if find_new_users:
         print("Looking for new users...")
         pull_usernames_from_transactions(blockId=last_block)
+
+    # Pull collections and check for new NFTs
+    print("Checking for new NFTs...")
+    collections = gs.get_collections()
+
+    def get_total_nfts(collection):
+        if collection['layer'] == "Loopring":
+            api_url = f"https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionStats?collectionId={collection['collectionId']}"
+            response = requests.get(api_url).json()
+            collection['itemCount'] = response['itemCount']
+        return collection
+
+    with ThreadPoolExecutor(max_workers=16) as executor:
+        futures = [executor.submit(get_total_nfts, collection) for collection in collections]
+        for future in as_completed(futures):
+            collection = future.result()
+            if collection['layer'] == "Loopring":
+                num_nft_db = len(nf.get_nfts_in_collection(collection['collectionId']))
+                #print(f"{collection['name']} has {collection['itemCount']} NFTs, {num_nft_db} in database")
+                if collection['itemCount'] > num_nft_db:
+                    print(f"Found {collection['itemCount'] - num_nft_db} new NFTs in {collection['name']}")
+                    nf.update_num_nfts_in_collection(collection['collectionId'], collection['itemCount'])
+                    NftCollection(collection['collectionId'], get_collection_nfts=True)
+
+    return True
 
 
 # Plot price history using pandas
@@ -259,7 +290,7 @@ def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=Fa
     fig.add_trace(go.Scatter(x=df.createdAt, y=df.priceUsd, name='Price (USD)', mode='lines+markers',
                              marker=dict(opacity=0.5), yaxis="y2"))
     fig.add_trace(
-        go.Bar(x=volume.index, y=volume.amount, name='Volume', texttemplate="%{value}", opacity=0.7, textangle=0,
+        go.Bar(x=volume.index, y=volume.amount, name='Volume', texttemplate="%{value}", opacity=0.5, textangle=0,
                yaxis="y3"))
     if plot_floor_price:
         fig.add_trace(go.Scatter(x=floor_df.snapshotTime, y=floor_df.floor_price, name='Floor Price', ))
@@ -308,11 +339,14 @@ def plot_collection_price_history(collection_id):
     for nft in nfts:
         plot_price_history(nft['nftId'], save_file=True)
 
-def find_complete_owners(nftId_list):
+def find_complete_owners(nftId_list, report_name):
     nftData_list = []
     for item in nftId_list:
-        nft = Nft(item)
-        nftData_list.append(nft.get_nft_data())
+        if len(item) > 36:
+            nftData_list.append(item)
+        else:
+            nft = Nft(item)
+            nftData_list.append(nft.get_nft_data())
 
     # Get the owners from of each NFT from Loopring API
     lr = loopring.LoopringAPI()
@@ -345,21 +379,55 @@ def find_complete_owners(nftId_list):
 
         user_dict = {'username': user.username, 'accountId': owner, 'address': user.address, 'amount': least_held}
         complete_owners_list.append(user_dict)
+        complete_owners_list = sorted(complete_owners_list, key=lambda k: k['amount'], reverse=True)
+
+    owners_pd = pd.DataFrame(complete_owners_list, columns=['username', 'accountId', 'address', 'amount'])
+    owners_pd.columns = ['Username', 'Account ID', 'Address', '# Sets Held']
+    print(owners_pd.to_string())
 
     # Get the names of the NFTs included in this report
     nft_names = []
     for nftId in nftId_list:
-        nft = Nft(nftId)
-        nft_names.append(nft.get_name())
+        if len(nftId) > 36:
+            nft_names.append(nftId)
+        else:
+            nft = Nft(nftId)
+            nft_names.append(nft.get_name())
     print(f"\n{nft_names}")
 
-    total_complete_sets = 0
-    for owner in complete_owners_list:
-        total_complete_sets += owner['amount']
-        print(f"{owner['username']} - {owner['accountId']} - {owner['address']} holds {owner['amount']} complete sets")
+    total_complete_sets = owners_pd['# Sets Held'].sum()
+    num_unique_holders = len(owners_pd.index)
+    print(f"\nTotal complete sets: {total_complete_sets}")
+    print(f"Number of unique holders: {num_unique_holders}")
 
-    print(f"\nTotal Unique Complete Collection Owners: {len(complete_owners_list)}")
-    print(f"Total number of complete sets: {total_complete_sets}")
+    date_and_time = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+    date = datetime.now().strftime('%Y-%m-%d')
+    if not os.path.exists(f"Complete Collection Owners\\{date}"):
+        os.makedirs(f"Complete Collection Owners\\{date}")
+
+    with pd.ExcelWriter(f"Complete Collection Owners\\{date}\\{date_and_time} {report_name}.xlsx") as writer:
+        sheet_name = f"{report_name}"
+        owners_pd.to_excel(writer, startrow=len(nftId_list)+6, sheet_name=sheet_name, index=False)
+        worksheet = writer.sheets[sheet_name]
+
+        for idx, nft in enumerate(nft_names):
+            worksheet.write(idx, 0, nft)
+
+        worksheet.write(len(nftId_list)+2, 0, "Total Complete Sets")
+        worksheet.write(len(nftId_list)+2, 1, total_complete_sets)
+        worksheet.write(len(nftId_list)+3, 0, "Unique Complete Set Holders")
+        worksheet.write(len(nftId_list)+3, 1, num_unique_holders)
+
+        writer.sheets[sheet_name].set_column(0, 0, 25)
+        writer.sheets[sheet_name].set_column(1, 1, 10)
+        writer.sheets[sheet_name].set_column(2, 2, 50)
+        writer.sheets[sheet_name].set_column(3, 3, 10)
+
+
+
+    return
+
+
 
 
 def find_complete_collection_owners():
@@ -995,13 +1063,15 @@ def pull_usernames_from_transactions(blockId=None):
     nf = nifty.NiftyDB()
     lr = loopring.LoopringAPI()
     user_tx = nf.get_all_gamestop_nft_users(blockId=blockId)
-    for user in user_tx:
+    nftDatas = tuple(i['nftData'] for i in nf.get_all_nftdatas())
+    for tx in user_tx:
         # Check to see if in database first
-        _, _, username = nf.get_user_info(accountId=user['buyerAccount'])
-        if username is None:
-            address = lr.get_user_address(user['buyerAccount'])
-            new_user = User(address=address)
-            print(f"Retrieved username for {user['buyerAccount']}: {new_user.username}")
+        if tx['nftData'] in nftDatas:
+            _, _, username = nf.get_user_info(accountId=tx['buyerAccount'])
+            if username is None:
+                address = lr.get_user_address(tx['buyerAccount'])
+                new_user = User(address=address)
+                print(f"Retrieved username for {tx['buyerAccount']}: {new_user.username}")
 
 
 # Function to be called periodically to check if user has set a username and update DB if so
@@ -1024,12 +1094,17 @@ def get_discord_server_stats(invite_code):
     :param invite_code:
     :return:
     """
-    disc = discord.DiscordAPI(invite_code)
+    api_url = f"https://discord.com/api/v9/invites/{invite_code}?with_counts=true"
+    response = requests.get(api_url)
+    if response.status_code == 200:
+        response = response.json()
+    else:
+        return None
     stats = dict()
-    stats['serverId'] = disc.serverId
-    stats['serverName'] = disc.server_name
-    stats['num_members'] = disc.num_members
-    stats['num_active'] = disc.num_active
+    stats['serverId'] = response['guild']['id']
+    stats['serverName'] = response['guild']['name']
+    stats['num_members'] = response['approximate_member_count']
+    stats['num_active'] = response['approximate_presence_count']
     stats['timestamp'] = int(datetime.now().timestamp())
     print(f"[{stats['timestamp']}] {stats['serverName']} has {stats['num_members']} total members and "
           f"{stats['num_active']} are currently active.")
@@ -1038,6 +1113,8 @@ def get_discord_server_stats(invite_code):
 
 def save_discord_server_stats(serverId):
     stats = get_discord_server_stats(serverId)
+    if stats is None:
+        raise ValueError("Unable to get stats for server")
     nf = nifty.NiftyDB()
     nf.insert_discord_server_stats(stats['serverId'], stats['serverName'], stats['timestamp'],
                                    stats['num_members'], stats['num_active'])
@@ -1058,7 +1135,7 @@ def plot_discord_server_stats(serverId, save_file=False, server_name="CyberCrew"
     fig.add_scatter(x=df.timestamp, y=df.num_online, name="Members Online", mode='lines+markers')
 
     fig.update_layout(title_text=f"{server_name} Discord Server Stats - {datetime.now().strftime('%Y-%m-%d')}",
-                      template="plotly_dark", xaxis_dtick=86400000)
+                      template="plotly_dark", xaxis_dtick=86400000*7)
     fig.update_xaxes(title_text="Date")
     fig.update_yaxes(title_text="Members", secondary_y=False)
     fig.show()
@@ -1508,7 +1585,7 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
             df = df[['Price', 'Price USD', 'Amount', 'Seller', 'Address', 'Total # For Sale', 'Owned']]
             sheet_name = str(idx+1) + " " + ''.join(x for x in nft.get_name() if (x.isalnum() or x in "._- "))[:27]
 
-            df.to_excel(writer, startrow=6, startcol=6, freeze_panes=(7,6), index=False, sheet_name=sheet_name)
+            df.to_excel(writer, startrow=6, startcol=6, freeze_panes=(7,0), index=False, sheet_name=sheet_name)
             worksheet = writer.sheets[sheet_name]
             worksheet.write(0, 0, 'NFT Name')
             worksheet.write(0, 1, nft.get_name())
@@ -1521,7 +1598,7 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
             holders_sorted = sorted(nft_holders, key=lambda d: int(d['amount']), reverse=True)
             holders_df = pd.DataFrame(holders_sorted, columns=['user', 'amount', 'address', 'accountId'])
             holders_df.columns = ['User', 'Amount', 'Address', 'Account ID']
-            holders_df.to_excel(writer, startrow=6, freeze_panes=(7,12), index=False, sheet_name=sheet_name)
+            holders_df.to_excel(writer, startrow=6, freeze_panes=(7,0), index=False, sheet_name=sheet_name)
             worksheet.write(3, 0, '# Holders')
             worksheet.write(3, 1, num_holders)
             worksheet.write(5, 2, 'Wallets Holding')
@@ -1679,7 +1756,25 @@ def print_1of1_collection_nft_owners(collectionId, filter_accountId=None):
 
 
 
+
+
 if __name__ == "__main__":
+    #grab_new_blocks()
+    Nft("6e34d003-d94d-4ced-bf23-5d62b7d322ba")
+    """
+    gs = GamestopApi()
+    db = nifty.NiftyDB()
+    new_collection_found = False
+    collections = gs.get_collections()
+    print()
+    for collection in collections:
+        if collection['layer'] == "Loopring":
+            col = NftCollection(collection['collectionId'], get_collection_nfts=True)
+    """
+
+
+
+
     #print_users_holdings_report([91727], "91727")
     #dump_detailed_orderbook_and_holders(PLS_LIST+PLS_PASS_LIST, "PLSTY Owner List and Orderbook", limit=3)
     #find_complete_collection_owners()
@@ -1687,7 +1782,9 @@ if __name__ == "__main__":
     #user = User(address="0xbe7bda8b66acb5159aaa022ab5d8e463e9fa8f7e")
     #print(user.get_nft_number_owned(Nft(CC_CYBER_CYCLE).get_nft_data(), use_lr=True))
 
+    #NftCollection(MB_COLLECTION_ID, get_collection_nfts=True)
     #lr = loopring.LoopringAPI()
+    #print(lr.get_block(28000))
     #print(lr.get_pending(transfers=False, mints=False))
     #print(lr.get_block(24412))
     #collection = NftCollection(BOOP_COLLECTION_ID)
@@ -1697,8 +1794,36 @@ if __name__ == "__main__":
     #print_single_collection_nft_owners("a5085ce8-ae23-4d41-b85e-cdb3ee33ebea", filter_accountId=82667)
     #dump_detailed_orderbook_and_holders([PLS_OCEAN_CELEBRATION], "Neon Ocean Celebration Owner List")
 
-    #print_user_collection_ownership(PLS_PD_LIST+PLS_PASS_LIST)
-    print_plsty_collection_ownership()
-    #find_complete_owners(CC_LIST+CC_CLAW_LIST+CC_CELEBRATION_LIST)
+    #nf = nifty.NiftyDB()
+    #owner = nf.get_last_buyer_for_nft("0x2b1ad18da9fbad41b8e8ad00b709daa6622dc600ac717c239aa4107cd5b2ede7")
+    #print(f"Last buyer: {owner['username']} ({owner['accountId']}) - {owner['address']}")
 
+    #find_cc_and_mb_owners()
+    #find_cc_and_kiraverse_owners()
+    #find_cc_owners()
+    #print_user_collection_ownership(PLS_PD_LIST+PLS_PASS_LIST)
+    #print_plsty_collection_ownership()
+
+    #for nft in CC_C4_2_LIST:
+    #    Nft(nft)
+    #find_complete_owners(MB_ONLY_LIST, "MB Complete Collection Owners")
+
+    #find_cc_c4_pt2_transactions()
+    #find_loopingu_owners()
+    #find_complete_owners([LOOPINGU_LEGACY_SAMURAI_CYCLE, LOOPINGU_LEGACY_CYBORG_CYCLE], "Loopingu Cycle")
+    #find_complete_owners([LOOPINGU_LEGACY_TRACKSUIT, LOOPINGU_LEGACY_TRACKSUIT2, LOOPINGU_LEGACY_TRACKSUIT3], "Loopingu Tracksuit")
+    #find_complete_owners(CC_LIST+CC_CLAW_LIST+CC_CELEBRATION_LIST+CC_AIRDROP_LIST, "CC Complete Owners")
+    #find_complete_owners(CC_C4_LIST, "CC 7 of 7 Complete Owners")
+    #find_complete_owners(CC_C4_LIST+CC_C4_2_LIST, "CC 16 of 16 Complete Owners")
+    #find_complete_owners(CC_LIST)
+    #find_complete_owners(CC_LIST+CC_CELEBRATION_LIST)
+    #find_complete_owners(KIRAVERSE_LIST, "Kiraverse Complete Collection Owners")
+    #find_complete_owners(MB_ONLY_LIST, "MB Complete Collection Owners")
+    #plot_returns_since_mint(CC_LIST, "Cyber Crew Returns Since Mint")
+    #print_plsty_collection_ownership()
+    #print_users_holdings_report([User(address="0x17e84bbf4248827df386fe3305bcdfc54c80575f").accountId], output_filename="H4SR")
+    #print_users_holdings_report([User(address="0x3242d7C33f744a9530cCa749ea8afE20799CE64D").accountId], output_filename="George")
+    #print(print_users_holdings_report([User(address="0x3242d7C33f744a9530cCa749ea8afE20799CE64D").accountId]), "George Loopingu")
+    #generate_cc_airdrop_list(4, 5000, 'card_holders_airdrop_snapshot_10-5-22.xlsx')
+    #generate_cc_airdrop_list(4, 5000, 'clone_holders_airdrop_snapshot_10-5-22.xlsx')
     pass

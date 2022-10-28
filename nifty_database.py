@@ -35,8 +35,15 @@ class NiftyDB:
         else:
             return result['accountId'], result['address'], result['username']
 
-    def insert_user_info(self, accountId, address, username):
-        self.c.execute("INSERT INTO users VALUES (?, ?, ?)", (accountId, address, username))
+    def insert_og_cybercrew(self, id, tokenId, seriesNumber, name, description, imageUrl,
+                     lastSalePrice, lastSaleTime, currentOwner):
+        self.c.execute("INSERT INTO og_cybercrew VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (id, tokenId, seriesNumber, name, description, imageUrl,
+                        lastSalePrice, lastSaleTime, currentOwner))
+        self.conn.commit()
+
+    def insert_user_info(self, accountId, address, username, discord_username):
+        self.c.execute("INSERT INTO users VALUES (?, ?, ?, ?)", (accountId, address, username, discord_username))
         self.conn.commit()
 
     def insert_nft(self, nftId, nftData, tokenId, contractAddress, creatorEthAddress, name, amount, attributes,
@@ -94,6 +101,11 @@ class NiftyDB:
     def insert_floor_price(self, nftId, floor_price, last_updated):
         query = (f"INSERT INTO floor_prices VALUES ('{nftId}', '{floor_price}', '{last_updated}')")
         self.c.execute(query)
+        self.conn.commit()
+
+    def insert_collection(self, collectionId, name, slug, creator, description, bannerUri, avatarUri, tileUri, createdAt, numNfts, layer):
+        self.c.execute("INSERT INTO collections VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                       (collectionId, name, slug, creator, description, bannerUri, avatarUri, tileUri, createdAt, numNfts, layer))
         self.conn.commit()
 
     def get_old_floor_price(self, nftId):
@@ -200,6 +212,17 @@ class NiftyDB:
         else:
             return result
 
+    def get_last_buyer_for_nft(self, nftData):
+        query = f"SELECT tx.buyerAccount AS accountId, buyer.address, buyer.username FROM transactions AS tx " \
+                f"LEFT JOIN users AS buyer ON tx.buyerAccount=buyer.accountId " \
+                f"WHERE nftData='{nftData}' ORDER BY createdAt DESC LIMIT 1"
+        self.c.execute(query)
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result
+
 
     def insert_historical_price_data(self, currency, dataFrame):
         for index in dataFrame.index:
@@ -237,6 +260,7 @@ class NiftyDB:
         else:
             return result
 
+
     def get_user_trade_history(self, accountId, nftData_List=None):
         query = "SELECT transactions.*, nfts.nftData, nfts.name, buyer.username as buyer, seller.username as seller " \
                 "FROM transactions " \
@@ -269,16 +293,6 @@ class NiftyDB:
         result = self.c.fetchall()
         if result is None:
             print(f"No transactions found for {nft_id}")
-            return None
-        else:
-            return result
-
-    def get_nfts_in_collection(self, collectionId):
-        query = f"SELECT name, collectionId, nftId, nftData FROM nfts WHERE collectionId = '{collectionId}' ORDER BY name LIMIT 200"
-        self.c.execute(query)
-        result = self.c.fetchall()
-        if result is None:
-            print(f"No NFTs found for {collectionId} in database")
             return None
         else:
             return result
@@ -378,6 +392,62 @@ class NiftyDB:
         self.c.execute(query)
         self.conn.commit()
 
+    def get_tx_by_timestamp(self, timestamp_start, timestamp_end):
+        query = f"SELECT * FROM transactions WHERE createdAt>={timestamp_start} AND createdAt<={timestamp_end}"
+        self.c.execute(query)
+        result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
 
+    def get_collection(self, collectionId):
+        query = f"SELECT * FROM collections WHERE collectionId='{collectionId}'"
+        self.c.execute(query)
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result
 
+    def get_collection_ids(self):
+        query = f"SELECT collectionId FROM collections ORDER BY createdAt DESC"
+        self.c.execute(query)
+        result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
+
+    def get_newest_collection(self):
+        query = f"SELECT * FROM collections ORDER BY createdAt DESC LIMIT 1"
+        self.c.execute(query)
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result
+
+    def get_nfts_in_collection(self, collectionId):
+        query = f"SELECT * FROM nfts WHERE collectionId='{collectionId}'"
+        self.c.execute(query)
+        result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
+
+    def get_all_nftdatas(self):
+        query = f"SELECT nftData FROM nfts"
+        self.c.execute(query)
+        result = self.c.fetchall()
+        if result is None:
+            return None
+        else:
+            return result
+
+    def update_num_nfts_in_collection(self, collectionId, numNfts):
+        query = f"UPDATE collections SET numNfts={numNfts} WHERE collectionId='{collectionId}'"
+        self.c.execute(query)
+        self.conn.commit()
 

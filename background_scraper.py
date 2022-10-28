@@ -7,7 +7,7 @@ import nifty_tools as nifty
 import nifty_database as db
 from nft_ids import *
 import xxhash
-from discord import Webhook, RequestsWebhookAdapter, Embed
+from discord import Webhook, Embed
 from gamestop_api import User, Nft, GamestopApi
 from loopring_api import LoopringAPI
 
@@ -261,15 +261,15 @@ def find_claw_paperhands(price_threshold=0.101):
     print(f"\n[{datetime.now()}] Done checking for paperhands\n")
 
 
-scheduler.add_job(find_claw_paperhands, 'interval', seconds=15)
-scheduler.add_job(find_claw_sales, 'interval', seconds=30)
-scheduler.add_job(find_conservation_paperhands, 'interval', seconds=15)
-scheduler.add_job(find_engwind_sales, 'interval', seconds=30)
+#scheduler.add_job(find_claw_paperhands, 'interval', seconds=15)
+#scheduler.add_job(find_claw_sales, 'interval', seconds=30)
+#scheduler.add_job(find_conservation_paperhands, 'interval', seconds=15)
+#scheduler.add_job(find_engwind_sales, 'interval', seconds=30)
 
-scheduler.add_job(check_gas_price, 'interval', seconds=60)
+#scheduler.add_job(check_gas_price, 'interval', seconds=60)
 
 # Check for block data every 5 minutes
-scheduler.add_job(block_scraper, 'interval', minutes=5)
+scheduler.add_job(block_scraper, 'interval', minutes=30)
 
 # Check for CyberCrew order data every 15 minutes
 #scheduler.add_job(cc_order_scraper, 'interval', minutes=15)
@@ -277,22 +277,22 @@ scheduler.add_job(block_scraper, 'interval', minutes=5)
 # Scrape Discord server stats every 10 minutes
 scheduler.add_job(discord_scraper, 'interval', minutes=10)
 
-scheduler.add_job(save_holder_stats_task, 'interval', minutes=180)
+#scheduler.add_job(save_holder_stats_task, 'interval', minutes=180)
 
 # Dump MB Honorary data every
 trigger = CronTrigger(year="*", month="*", day="*", hour="14", minute="0", second="0")
-scheduler.add_job(mb_honarary_scraper, trigger=trigger, args=[], name="MB Honorary Scraper")
+#scheduler.add_job(mb_honarary_scraper, trigger=trigger, args=[], name="MB Honorary Scraper")
 scheduler.start()
 scheduler.print_jobs()
 
 
 
-find_claw_paperhands()
-find_claw_sales()
-find_conservation_paperhands()
-find_engwind_sales()
+#find_claw_paperhands()
+#find_claw_sales()
+#find_conservation_paperhands()
+#find_engwind_sales()
 block_scraper()
 discord_scraper()
-check_gas_price()
+#check_gas_price()
 while True:
     time.sleep(0.2)
