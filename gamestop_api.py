@@ -340,7 +340,8 @@ class Nft:
                 response['updatedAt'] = time.mktime(response['updatedAt'].timetuple())
                 response['firstMintedAt'] = time.mktime(response['firstMintedAt'].timetuple())
                 thumbnailUrl = f"https://www.gstop-content.com/ipfs/{response['mediaThumbnailUri'][7:]}"
-                print(response['metadataJson']['attributes'])
+                if 'attributes' in response['metadataJson']:
+                    print(response['metadataJson']['attributes'])
                 if 'metadataJson' in response and 'attributes' in response['metadataJson']:
                     attributes = json.dumps(response['metadataJson']['attributes'])
                 else:

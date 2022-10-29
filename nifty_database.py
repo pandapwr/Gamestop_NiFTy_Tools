@@ -182,6 +182,7 @@ class NiftyDB:
             return result['blockId']
 
     def get_last_historical_price_data(self, currency):
+
         self.c.execute("SELECT * FROM historical_crypto_prices WHERE currency=? ORDER BY timestamp DESC LIMIT 1", (currency,))
         result = self.c.fetchone()
         if result is None:
@@ -262,7 +263,7 @@ class NiftyDB:
 
 
     def get_user_trade_history(self, accountId, nftData_List=None):
-        query = "SELECT transactions.*, nfts.nftData, nfts.name, buyer.username as buyer, seller.username as seller " \
+        query = "SELECT transactions.*, nfts.nftId, nfts.nftData, nfts.name, buyer.username as buyer, seller.username as seller " \
                 "FROM transactions " \
                 "INNER JOIN nfts on transactions.nftData = nfts.nftData " \
                 "INNER JOIN users as buyer on transactions.buyerAccount = buyer.accountId " \

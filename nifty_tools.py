@@ -19,7 +19,7 @@ from nft_ids import *
 from collection_tools.plsty_tools import *
 from collection_tools.cybercrew_tools import *
 from collection_tools.loopingu_tools import *
-from scanner_config import *
+# from scanner_config import *
 
 
 import nifty_database as nifty
@@ -247,7 +247,7 @@ def grab_new_blocks(find_missing=False, find_new_users=True):
 
 
 # Plot price history using pandas
-def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=False, limit_volume=True):
+def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=False, usd=True, limit_volume=True, show_fig=True, subfolder=None):
     """
     Plots the price history of a given NFT
     Parameters
@@ -287,8 +287,9 @@ def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=Fa
 
     fig.add_trace(go.Scatter(x=df.createdAt, y=df.price, name='Price (ETH)', mode='lines+markers',
                              marker=dict(opacity=0.5)))
-    fig.add_trace(go.Scatter(x=df.createdAt, y=df.priceUsd, name='Price (USD)', mode='lines+markers',
-                             marker=dict(opacity=0.5), yaxis="y2"))
+    if usd:
+        fig.add_trace(go.Scatter(x=df.createdAt, y=df.priceUsd, name='Price (USD)', mode='lines+markers',
+                                 marker=dict(opacity=0.5), yaxis="y2"))
     fig.add_trace(
         go.Bar(x=volume.index, y=volume.amount, name='Volume', texttemplate="%{value}", opacity=0.5, textangle=0,
                yaxis="y3"))
@@ -321,13 +322,16 @@ def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=Fa
                       title_font=plotly_title_font,
                       title_text=f"{nft_data['name']} Price History - {datetime.now().strftime('%Y-%m-%d')}",
                       template="plotly_dark")
-
-    fig.show()
+    if show_fig:
+        fig.show()
 
     if save_file:
-        folder = f"price_history_charts\\{datetime.now().strftime('%Y-%m-%d')}"
-        if not os.path.exists(f"price_history_charts\\{datetime.now().strftime('%Y-%m-%d')}"):
-            os.makedirs(f"price_history_charts\\{datetime.now().strftime('%Y-%m-%d')}")
+        if subfolder:
+            folder = f"price_history_charts\\{datetime.now().strftime('%Y-%m-%d')}\\{subfolder}"
+        else:
+            folder = f"price_history_charts\\{datetime.now().strftime('%Y-%m-%d')}"
+        if not os.path.exists(folder):
+            os.makedirs(folder)
         filename = "".join(x for x in nft_data['name'] if (x.isalnum() or x in "._- ")) + '.png'
 
         fig.write_image(f"{folder}\\{filename}", width=1600, height=1000)
@@ -1613,7 +1617,7 @@ def dump_detailed_orderbook_and_holders(nftId_list, filename, limit=None):
             writer.sheets[sheet_name].set_column(10, 10, 45)
             writer.sheets[sheet_name].set_column(11, 11, 12)
 
-def plot_eth_volume(nft_list, period = [1,7,30]):
+def plot_eth_volume(nft_list, period = [1,7,30], save_file=False, show_fig=True, file_name="eth_volume", subfolder=None):
     """
     Provide a bar plot of ETH Volume for a list of NFT
 
@@ -1651,7 +1655,18 @@ def plot_eth_volume(nft_list, period = [1,7,30]):
         fig.update_layout(title_text=f"ETH Volume", title_x=0.5, template="plotly_dark")
         # fig.update_yaxes(title_text="Per wallet")
         i+=1
-    fig.show()
+    if show_fig:
+        fig.show()
+
+    if save_file:
+        if subfolder:
+            folder = f"price_history_charts\\{datetime.now().strftime('%Y-%m-%d')}\\{subfolder}"
+        else:
+            folder = f"price_history_charts\\{datetime.now().strftime('%Y-%m-%d')}"
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        filename = "".join(x for x in file_name if (x.isalnum() or x in "._- ")) + '.png'
+        fig.write_image(f"{folder}\\{filename}", width=1600, height=1000)
 
 
 def get_volume_for_nft(nft_id, period, now=datetime.now()):
@@ -1759,7 +1774,7 @@ def print_1of1_collection_nft_owners(collectionId, filter_accountId=None):
 
 
 if __name__ == "__main__":
-    #grab_new_blocks()
+    grab_new_blocks()
     Nft("6e34d003-d94d-4ced-bf23-5d62b7d322ba")
     """
     gs = GamestopApi()
@@ -1774,10 +1789,9 @@ if __name__ == "__main__":
 
 
 
-
     #print_users_holdings_report([91727], "91727")
-    #dump_detailed_orderbook_and_holders(PLS_LIST+PLS_PASS_LIST, "PLSTY Owner List and Orderbook", limit=3)
-    #find_complete_collection_owners()
+    # dump_detailed_orderbook_and_holders(PLS_LIST+PLS_PASS_LIST, "PLSTY Owner List and Orderbook", limit=3)
+    # find_complete_collection_owners()
     #print_user_collection_ownership([PLS_PURPLE_DREAM, PLS_PURPLE_DREAM_2, PLS_PURPLE_DREAM_3, PLS_PURPLE_DREAM_STILL, PLS_SPECIAL])
     #user = User(address="0xbe7bda8b66acb5159aaa022ab5d8e463e9fa8f7e")
     #print(user.get_nft_number_owned(Nft(CC_CYBER_CYCLE).get_nft_data(), use_lr=True))
