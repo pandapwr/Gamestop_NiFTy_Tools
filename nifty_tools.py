@@ -281,10 +281,6 @@ def plot_price_history(nft_id, save_file=False, bg_img=None, plot_floor_price=Fa
         volume.loc[volume['amount'] > limit, 'amount'] = limit
 
     fig = go.Figure()
-
-
-
-
     fig.add_trace(go.Scatter(x=df.createdAt, y=df.price, name='Price (ETH)', mode='lines+markers',
                              marker=dict(opacity=0.5)))
     fig.add_trace(go.Scatter(x=df.createdAt, y=df.priceUsd, name='Price (USD)', mode='lines+markers',
@@ -1067,11 +1063,16 @@ def pull_usernames_from_transactions(blockId=None):
     for tx in user_tx:
         # Check to see if in database first
         if tx['nftData'] in nftDatas:
-            _, _, username = nf.get_user_info(accountId=tx['buyerAccount'])
-            if username is None:
+            _, _, buyer_username = nf.get_user_info(accountId=tx['buyerAccount'])
+            _, _, seller_username = nf.get_user_info(accountId=tx['sellerAccount'])
+            if buyer_username is None:
                 address = lr.get_user_address(tx['buyerAccount'])
                 new_user = User(address=address)
                 print(f"Retrieved username for {tx['buyerAccount']}: {new_user.username}")
+            if seller_username is None:
+                address = lr.get_user_address(tx['sellerAccount'])
+                new_user = User(address=address)
+                print(f"Retrieved username for {tx['sellerAccount']}: {new_user.username}")
 
 
 # Function to be called periodically to check if user has set a username and update DB if so
@@ -1760,7 +1761,8 @@ def print_1of1_collection_nft_owners(collectionId, filter_accountId=None):
 
 if __name__ == "__main__":
     #grab_new_blocks()
-    Nft("6e34d003-d94d-4ced-bf23-5d62b7d322ba")
+    #Nft("6e34d003-d94d-4ced-bf23-5d62b7d322ba")
+    #pull_usernames_from_transactions(blockId=24340)
     """
     gs = GamestopApi()
     db = nifty.NiftyDB()
