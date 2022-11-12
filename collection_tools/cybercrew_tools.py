@@ -179,6 +179,54 @@ def generate_cc_airdrop_list(num_workers, total_nfts, snapshot_file):
 
     workbook.close()
 
+def find_silver_saffron():
+    lr = loopring.LoopringAPI()
+    _, owners = lr.get_nft_holders(Nft(CC_CYPROTEKKIX).get_nft_data())
+
+    sets_list = []
+    total_sets = 0
+    remaining = 0
+    owners_less_than_4 = 0
+    more_than_4_total = 0
+    less_than_4_more_than_1 = 0
+    less_than_4_total = 0
+    for holder in owners:
+        if holder['accountId'] != 92477:
+            sets = holder['amount'] // 4
+            if sets > 0:
+                holder_data = dict()
+                holder_data['sets'] = sets
+                holder_data['user'] = holder['user']
+                holder_data['address'] = holder['address']
+                holder_data['accountId'] = holder['accountId']
+                holder_data['amount'] = holder['amount']
+                sets_list.append(holder_data)
+                total_sets += sets
+                more_than_4_total += holder['amount']
+            elif sets == 0:
+                owners_less_than_4 += 1
+                if holder['amount'] > 1:
+                    less_than_4_more_than_1 += 1
+                less_than_4_total += holder['amount']
+
+        else:
+            remaining = holder['amount']
+
+    not_in_sets = 4000-remaining-total_sets*4
+
+    sorted_sets = sorted(sets_list, key=lambda k: k['sets'], reverse=True)
+    for owner in sorted_sets:
+        print(f"{owner['user']} has {owner['sets']}x Silver Saffron")
+    print(f"Total Silver Saffron: {total_sets}")
+    print(f"Kix Remaining: {remaining}")
+    print(f"Not in Sets: {not_in_sets}")
+    print(f"Owners with less than 4: {owners_less_than_4}")
+    print(f"Owners with less than 4 and more than 1: {less_than_4_more_than_1}")
+    print(f"Average held per non-full set owner: {round(less_than_4_total/owners_less_than_4,1)}")
+    print(f"Average held per full set owner: {round(more_than_4_total/len(sorted_sets),1)}")
+
+    return sorted_sets
+
 
 
 

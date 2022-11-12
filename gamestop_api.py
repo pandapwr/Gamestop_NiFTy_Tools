@@ -163,7 +163,7 @@ class NftCollection:
 
         # Get the total number of items in the collection
         api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftsPaginated?"
-                   f"limit=0&collectionId={self.collectionID}")
+                   f"nativeLayer=Loopring&limit=0&collectionId={self.collectionID}")
         response = requests.get(api_url, headers=self.headers).json()
         num_items = response['totalNum']
         print(f"{self.get_name()} has {num_items} items, grabbing NFTs now...")
@@ -176,7 +176,7 @@ class NftCollection:
             while remaining > 0:
                 print(f"{remaining} NFTs remaining...")
                 api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftsPaginated?"
-                           f"limit=500&offset={offset}&collectionId={self.collectionID}&sortBy={sort}&sortOrder={sort_order}")
+                           f"nativeLayer=Loopring&limit=500&offset={offset}&collectionId={self.collectionID}&sortBy={sort}&sortOrder={sort_order}")
                 offset += 500
                 remaining -= 500
                 response = requests.get(api_url, headers=self.headers)
@@ -184,7 +184,7 @@ class NftCollection:
                     nfts.extend(response.json()['data'])
         else:
             api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftsPaginated?"
-                       f"limit={limit}&offset={offset}&collectionId={self.collectionID}&sortBy={sort}&sortOrder={sort_order}")
+                       f"nativeLayer=Loopring&limit={limit}&offset={offset}&collectionId={self.collectionID}&sortBy={sort}&sortOrder={sort_order}")
             response = requests.get(api_url, headers=self.headers)
             if response.status_code == 200:
                 nfts = response.json()['data']
@@ -204,10 +204,10 @@ class NftCollection:
 
     def get_collection_metadata(self):
         try:
-            api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionMetadata?"
+            api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getCollections?"
                        f"collectionId={self.collectionID}")
             response = requests.get(api_url, headers=self.headers).json()
-            return response
+            return response[0]
         except Exception as e:
             print(traceback.format_exc())
             print(f"Error retrieving metadata for {self.collectionID}: {e}")
@@ -340,7 +340,6 @@ class Nft:
                 response['updatedAt'] = time.mktime(response['updatedAt'].timetuple())
                 response['firstMintedAt'] = time.mktime(response['firstMintedAt'].timetuple())
                 thumbnailUrl = f"https://www.gstop-content.com/ipfs/{response['mediaThumbnailUri'][7:]}"
-                print(response['metadataJson']['attributes'])
                 if 'metadataJson' in response and 'attributes' in response['metadataJson']:
                     attributes = json.dumps(response['metadataJson']['attributes'])
                 else:
@@ -613,7 +612,14 @@ class Nft:
         return self.data['nftId']
 
     def get_collection(self):
-        return self.data['collectionId']
+        if self.data is None:
+            return None
+
+        collection = self.data.get('collectionId')
+        if collection is None:
+            return None
+        else:
+            return collection
 
     def get_lowest_price(self):
         if len(self.orders) == 0:
@@ -877,4 +883,6 @@ class UrlDecoder:
     def __str__(self):
         return str(self.nft)
 
+if __name__ == "__main__":
+    pass
 

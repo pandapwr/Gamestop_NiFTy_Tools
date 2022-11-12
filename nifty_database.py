@@ -451,3 +451,32 @@ class NiftyDB:
         self.c.execute(query)
         self.conn.commit()
 
+    def get_loopingu_rarity(self, number):
+        query = f"SELECT * FROM loopingu_rarity WHERE number='{number}'"
+        self.c.execute(query)
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result
+
+    def get_nft_by_name(self, name):
+        query = f"SELECT * FROM nfts WHERE name='{name}'"
+        self.c.execute(query)
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result
+
+    def get_nft_owner(self, nftData):
+        query = f"SELECT * FROM transactions WHERE nftData='{nftData}' ORDER BY createdAt DESC LIMIT 1"
+        self.c.execute(query)
+        result = self.c.fetchone()
+        if result is None:
+            return None
+        else:
+            return result['buyerAccount']
+
+if __name__ == "__main__":
+    pass

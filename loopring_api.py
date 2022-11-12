@@ -32,10 +32,14 @@ class LoopringAPI:
         total_num = 0
 
         api_url = f"https://api3.loopring.io/api/v3/nft/info/nftHolders?nftData={nftData}&limit=500"
-        response = self.lr.get(api_url).json()
+        while True:
+            response = self.lr.get(api_url)
+            if response.status_code == 200:
+                response = response.json()
+                break
+
 
         total_num = response['totalNum']
-
 
         return total_num
 
@@ -99,9 +103,11 @@ class LoopringAPI:
 
     def get_accountId_from_address(self, address):
         api_url = f"https://api3.loopring.io/api/v3/account?owner={address}"
-        account_id = self.lr.get(api_url).json()['accountId']
-
-        return account_id
+        response = self.lr.get(api_url).json()
+        if 'accountId' in response:
+            return response['accountId']
+        else:
+            return None
 
     @sleep_and_retry
     @limits(calls=5, period=1)
@@ -216,3 +222,6 @@ class LoopringAPI:
     def get_nft_transfer_fees(self, token):
         api_url = f"https://api3.loopring.io/api/v3/user/offchainFee?accountId=0&requestType=11&tokenSymbol=LRC"
 
+
+if __name__ == "__main__":
+    pass

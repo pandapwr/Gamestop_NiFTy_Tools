@@ -7,7 +7,7 @@ import numpy as np
 from plotly.subplots import make_subplots
 from PIL import Image
 import networkx as nx
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from xlsxwriter import Workbook
 
 import gamestop_api
@@ -1213,7 +1213,7 @@ def calculate_holder_stats(nftId, end_timestamp=None, calculate_average=True):
     # Calculate average hold time
     if calculate_average:
         holder_hold_times = []
-        with ThreadPoolExecutor(max_workers=40) as executor:
+        with ThreadPoolExecutor(max_workers=32) as executor:
             futures = [executor.submit(get_user_average_hold_time, nftId, holder['accountId'], end_timestamp)
                        for holder in holders]
             for future in futures:
@@ -1763,6 +1763,10 @@ if __name__ == "__main__":
     #grab_new_blocks()
     #Nft("6e34d003-d94d-4ced-bf23-5d62b7d322ba")
     #pull_usernames_from_transactions(blockId=24340)
+
+    #find_silver_saffron()
+    #find_loopingu_sets()
+
     """
     gs = GamestopApi()
     db = nifty.NiftyDB()
@@ -1774,7 +1778,29 @@ if __name__ == "__main__":
             col = NftCollection(collection['collectionId'], get_collection_nfts=True)
     """
 
+    """
+    nftdata = "0x1037be489e086b2e4b2d749deccaa62cf17a99d6a481165fa4d30784b4d2daf9"
+    lr = loopring.LoopringAPI()
+    num_pending = 0
+    pending_tx = lr.get_pending(transfers = False, mints=False)['transactions']
+    for tx in pending_tx:
+        if tx['orderA']['nftData'] == nftdata:
+            if tx['orderB']['accountID'] == 177969 or tx['orderB']['accountId'] == 177970:
+                num_pending += int(tx['orderA']['amountB'])
 
+    print(f"{num_pending} pending")
+
+    nf = nifty.NiftyDB()
+    past_tx = nf.get_nft_transactions(nftdata)
+    for tx in past_tx:
+        if tx['txType'] == "SpotTrade" and tx['sellerAccount'] == 177969:
+            num_pending += tx['amount']
+
+    print(f"{num_pending} total")
+    print(f"{3333 - 2222 - 531 - num_pending} remaining")
+    """
+
+    #dump_detailed_orderbook_and_holders(['b241329a-f015-4481-b926-850303d764b2'], "PLSTY Birthday")
 
 
     #print_users_holdings_report([91727], "91727")
