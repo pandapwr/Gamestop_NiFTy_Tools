@@ -174,6 +174,47 @@ class ImmutableAPI:
         else:
             return response.json()
 
+    def get_order_info(self, order_id):
+        """
+        Get Order metadata
+        :param str order_id: Order ID
+        :return: Order data dictionary
+        """
+        api_url = f"{self.api_base}/v1/orders/{order_id}"
+        response = requests.get(api_url, headers=self.headers)
+        if response.status_code != 200:
+            error = response.json()
+            print(f"Error Fetching Order Info: {response.status_code} {error.get('details')} {error.get('message')}")
+            return None
+        else:
+            return response.json()
+
+    def get_nft_trade_data(self, trade_dict: dict):
+        """
+        Get Buyer/Seller of a trade
+        :param str trade_dict: Trade dictionary object from get_trades
+        :return: Trade data dictionary
+        """
+        buyer_data = self.get_order_info(trade_dict['a']['order_id'])
+        seller_data = self.get_order_info(trade_dict['b']['order_id'])
+
+        trade_data = dict()
+        trade_data['transaction_id'] = trade_dict['transaction_id']
+        trade_data['buyer'] = buyer_data['user']
+        trade_data['seller'] = seller_data['user']
+        trade_data['token_id'] = buyer_data['buy']['data']['token_id']
+        trade_data['token_address'] = buyer_data['buy']['data']['token_address']
+        trade_data['name'] = buyer_data['buy']['data']['properties']['name']
+        trade_data['image_url'] = buyer_data['buy']['data']['properties']['image_url']
+        trade_data['gs_url'] = f"https://nft.gamestop.com/token/{trade_data['token_address']}/{trade_data['token_id']}"
+        trade_data['quantity'] = int(buyer_data['buy']['data']['quantity'])
+        trade_data['price'] = float(buyer_data['sell']['data']['quantity']) / (10**float(buyer_data['sell']['data']['decimals']))
+        trade_data['price_symbol'] = buyer_data['sell']['data']['symbol']
+        trade_data['timestamp'] = buyer_data['timestamp']
+
+        return trade_data
+
+
     def get_transfers(self, token_address=None, token_id=None, token_name=None, sender=None, receiver=None,
                       metadata=None, order_by="created_at", order="desc", min_timestamp=None,
                       max_timestamp=None, cursor=None, page_size=200, limit=200):
@@ -222,6 +263,4 @@ class ImmutableAPI:
 
 
 if __name__ == "__main__":
-    immutable = ImmutableAPI()
-    KIRAVERSE = "0xe2c921ed59f5a4011b4ffc6a4747015dcb5b804f"
-
+    pass
