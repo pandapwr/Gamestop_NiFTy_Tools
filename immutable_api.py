@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import gamestop_api
 import nifty_database as nifty
 import yaml
+from datetime import datetime, timedelta
 
 
 
@@ -143,12 +144,14 @@ class ImmutableAPI:
         while remaining > 0:
             response = requests.get(api_url, headers=self.headers, params=params)
             if response.status_code != 200:
-                error = response.json()
-                print(f"Error Fetching Trades: {response.status_code} {error.get('details')} {error.get('message')}")
+                print(f"Error Fetching Trades: {response.status_code} {response}")
                 return None
             else:
                 response = response.json()
-                remaining -= len(response['result'])
+                num_trades = len(response['result'])
+                if num_trades == 0:
+                    break
+                remaining -= num_trades
                 params['cursor'] = response['cursor']
                 trades.extend(response['result'])
                 if remaining < 200:
@@ -242,6 +245,7 @@ class ImmutableAPI:
         remaining = limit
         transfers = []
         while remaining > 0:
+
             response = requests.get(api_url, headers=self.headers, params=params)
             if response.status_code != 200:
                 error = response.json()
@@ -249,7 +253,10 @@ class ImmutableAPI:
                 return None
             else:
                 response = response.json()
-                remaining -= len(response['result'])
+                num_transfers = len(response['result'])
+                if num_transfers == 0:
+                    return []
+                remaining -= num_transfers
                 transfers.extend(response['result'])
                 if remaining < 200:
                     params['page_size'] = remaining
@@ -263,4 +270,5 @@ class ImmutableAPI:
 
 
 if __name__ == "__main__":
+
     pass
