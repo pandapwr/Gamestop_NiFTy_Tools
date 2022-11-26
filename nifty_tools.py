@@ -239,12 +239,9 @@ def grab_new_blocks(find_missing=False, find_new_users=True):
                 num_nft_db = len(nf.get_nfts_in_collection(collection['collectionId']))
                 #print(f"{collection['name']} has {collection['itemCount']} NFTs, {num_nft_db} in database")
                 if collection['itemCount'] > num_nft_db:
-                    if collection['collectionId'] == "f995db27-5b63-42a7-ad87-e798a40120c4":
-                        continue
-                    else:
-                        print(f"Found {collection['itemCount'] - num_nft_db} new NFTs in {collection['name']}")
-                        nf.update_num_nfts_in_collection(collection['collectionId'], collection['itemCount'])
-                        NftCollection(collection['collectionId'], get_collection_nfts=True)
+                    print(f"Found {collection['itemCount'] - num_nft_db} new NFTs in {collection['name']}")
+                    nf.update_num_nfts_in_collection(collection['collectionId'], collection['itemCount'])
+                    NftCollection(collection['collectionId'], get_collection_nfts=True)
 
     return True
 
