@@ -189,12 +189,13 @@ class NiftyDB:
         else:
             return result['timestamp']
 
-    def get_historical_price(self, currency, timestamp):
+    def get_historical_price(self, currency, timestamp, print_str=True):
         start = timestamp - 1000
         end = timestamp + 500
         query = f"SELECT * FROM historical_crypto_prices WHERE currency='{currency}' AND timestamp " \
                 f"BETWEEN {start} AND {end} ORDER BY timestamp DESC"
-        print(f"Retrieving price for {currency} at {timestamp}")
+        if print_str:
+            print(f"Retrieving price for {currency} at {timestamp}")
         #print(f"Query: {query}")
         self.c.execute(query)
         result = self.c.fetchone()
@@ -262,7 +263,7 @@ class NiftyDB:
 
 
     def get_user_trade_history(self, accountId, nftData_List=None):
-        query = "SELECT transactions.*, nfts.nftData, nfts.name, buyer.username as buyer, seller.username as seller " \
+        query = "SELECT transactions.*, nfts.nftData, nfts.nftId, nfts.name, buyer.username as buyer, seller.username as seller " \
                 "FROM transactions " \
                 "INNER JOIN nfts on transactions.nftData = nfts.nftData " \
                 "INNER JOIN users as buyer on transactions.buyerAccount = buyer.accountId " \
