@@ -126,9 +126,7 @@ class NftCollection:
         self.stats = self.get_collection_stats()
         self.metadata = self.get_collection_metadata()
         if get_collection_nfts:
-
             self.collection_nfts = self.get_collection_nfts(get_all=True)
-
         else:
             self.collection_nfts = None
 
@@ -166,9 +164,7 @@ class NftCollection:
         # Get the total number of items in the collection
         api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftsPaginated?"
                    f"nativeLayer=Loopring&limit=0&collectionId={self.collectionID}")
-
         response = requests.get(api_url, headers=self.headers).json()
-
         num_items = response['totalNum']
         print(f"{self.get_name()} has {num_items} items, grabbing NFTs now...")
 
@@ -181,7 +177,6 @@ class NftCollection:
                 print(f"{remaining} NFTs remaining...")
                 api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftsPaginated?"
                            f"nativeLayer=Loopring&limit=500&offset={offset}&collectionId={self.collectionID}&sortBy={sort}&sortOrder={sort_order}")
-
                 offset += 500
                 remaining -= 500
                 response = requests.get(api_url, headers=self.headers)
@@ -190,7 +185,6 @@ class NftCollection:
         else:
             api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getNftsPaginated?"
                        f"nativeLayer=Loopring&limit={limit}&offset={offset}&collectionId={self.collectionID}&sortBy={sort}&sortOrder={sort_order}")
-
             response = requests.get(api_url, headers=self.headers)
             if response.status_code == 200:
                 nfts = response.json()['data']
@@ -259,17 +253,6 @@ class NftCollection:
         if len(self.collection_nfts) == 0:
             self.collection_nfts = self.get_collection_nfts()
         return [nft['nftId'] for nft in self.collection_nfts]
-
-    def get_collection_creator(self):
-        try:
-            api_url = ("https://api.nft.gamestop.com/nft-svc-marketplace/getCollectionMetadata?"
-                       f"collectionId={self.collectionID}")
-            response = requests.get(api_url, headers=self.headers).json()
-            return response
-        except Exception as e:
-            print(traceback.format_exc())
-            print(f"Error retrieving metadata for {self.collectionID}: {e}")
-
 
 
 class Nft:

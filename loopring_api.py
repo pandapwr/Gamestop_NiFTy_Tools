@@ -186,13 +186,6 @@ class LoopringAPI:
         db = nifty.NiftyDB()
         block_price_eth = db.get_historical_price('ETH', int(blockData['createdAt']/1000))
         block_price_lrc = db.get_historical_price('LRC', int(blockData['createdAt']/1000))
-        if block_price_eth is None:
-            print(f"Block {blockData['blockId']} has no price data")
-            block_price_eth = 1
-        if block_price_lrc is None:
-            print(f"Block {blockData['blockId']} has no price data")
-            block_price_lrc = 1
-
         print(f"Block {blockData['blockId']} price: ${block_price_eth}")
 
         # Check to see if block already exists in database
